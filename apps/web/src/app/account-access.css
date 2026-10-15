@@ -1,0 +1,73 @@
+.access-widget {
+  position: fixed;
+  z-index: 40;
+  right: clamp(10px, 2vw, 24px);
+  bottom: max(12px, env(safe-area-inset-bottom));
+  width: min(360px, calc(100vw - 20px));
+  max-height: min(76dvh, 680px);
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  padding: 14px;
+  background: var(--surface);
+  box-shadow: 0 14px 45px rgb(0 0 0 / 24%);
+  color: var(--text);
+}
+
+.access-widget-message,
+.access-unblock-form {
+  display: grid;
+  gap: 10px;
+}
+
+.access-widget-message p,
+.access-restriction p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.access-action-button,
+.access-action-link,
+.access-text-button {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 7px 11px;
+  background: var(--brand);
+  color: #10140b;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.access-action-button:disabled { opacity: 0.6; cursor: wait; }
+.access-text-button { min-height: 28px; border: 0; padding: 4px; background: transparent; color: var(--brand); }
+.access-widget :is(button, a, input, textarea):focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.access-restriction { display: grid; gap: 10px; }
+.access-restriction h2 { margin: 0; font-size: clamp(1.15rem, 4vw, 1.45rem); letter-spacing: -0.02em; }
+.access-reference-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.access-reference-row code { overflow-wrap: anywhere; color: var(--text); font-size: 0.78rem; font-weight: 700; }
+.access-unblock-form { border-top: 1px solid var(--line); padding-top: 11px; }
+.access-unblock-form > strong { font-size: 0.82rem; }
+.access-unblock-form label { display: grid; gap: 5px; color: var(--text-muted); font-size: 0.74rem; }
+.access-unblock-form input,
+.access-unblock-form textarea { width: 100%; min-width: 0; border: 1px solid var(--line-strong); border-radius: 7px; padding: 8px; background: var(--surface-raised); color: var(--text); font: inherit; }
+.access-honeypot { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.access-form-state { margin: 0; color: var(--text-muted); font-size: 0.74rem; line-height: 1.45; }
+
+@media (max-width: 480px) {
+  .access-widget { right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); width: calc(100vw - 20px); max-height: min(70dvh, 560px); padding: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .access-widget,
+  .access-widget * { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+}

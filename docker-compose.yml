@@ -1,0 +1,85 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cgs_shield
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
+      MIGRATOR_DB_PASSWORD: ${MIGRATOR_DB_PASSWORD:?Set MIGRATOR_DB_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./apps/api/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cgs_shield"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  api:
+    build: ./apps/api
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+psycopg://cgs_app:${APP_DB_PASSWORD}@db:5432/cgs_shield
+      MIGRATION_DATABASE_URL: postgresql+psycopg://cgs_migrator:${MIGRATOR_DB_PASSWORD}@db:5432/cgs_shield
+      STORAGE_DIR: /srv/storage
+      AUTO_CREATE_SCHEMA: "false"
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:?Set SESSION_COOKIE_SECURE=true behind HTTPS}
+      APP_SECRET_KEY: ${APP_SECRET_KEY:?Set APP_SECRET_KEY in .env}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      APP_ORIGINS: ${APP_ORIGINS:?Set APP_ORIGINS to exact browser origins}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-10485760}
+      MAX_IMAGE_PIXELS: ${MAX_IMAGE_PIXELS:-40000000}
+      AI_DETECTOR_PROVIDER: ${AI_DETECTOR_PROVIDER:-local}
+      AI_MODEL_PATH: /srv/models/community_forensics_low_quality_fp16.onnx
+      INFERENCE_CPU_THREADS: ${INFERENCE_CPU_THREADS:-2}
+      INFERENCE_MAX_ATTEMPTS: ${INFERENCE_MAX_ATTEMPTS:-3}
+      INFERENCE_LEASE_SECONDS: ${INFERENCE_LEASE_SECONDS:-1800}
+    volumes:
+      - private_storage:/srv/storage
+      - detector_models:/srv/models
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+  worker:
+    build: ./apps/api
+    command: ["sh", "-c", "if [ \"$AI_DETECTOR_PROVIDER\" = local ]; then python -m app.download_model || echo 'Model unavailable; AI screening will be reported unavailable.'; fi; exec python -m app.worker"]
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+psycopg://cgs_app:${APP_DB_PASSWORD}@db:5432/cgs_shield
+      STORAGE_DIR: /srv/storage
+      AUTO_CREATE_SCHEMA: "false"
+      APP_SECRET_KEY: ${APP_SECRET_KEY:?Set APP_SECRET_KEY in .env}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:?Set SESSION_COOKIE_SECURE=true behind HTTPS}
+      APP_ORIGINS: ${APP_ORIGINS:?Set APP_ORIGINS to exact browser origins}
+      AI_DETECTOR_PROVIDER: ${AI_DETECTOR_PROVIDER:-local}
+      AI_MODEL_PATH: /srv/models/community_forensics_low_quality_fp16.onnx
+      INFERENCE_CPU_THREADS: ${INFERENCE_CPU_THREADS:-2}
+      INFERENCE_MAX_ATTEMPTS: ${INFERENCE_MAX_ATTEMPTS:-3}
+      INFERENCE_LEASE_SECONDS: ${INFERENCE_LEASE_SECONDS:-1800}
+    volumes:
+      - private_storage:/srv/storage
+      - detector_models:/srv/models
+    depends_on:
+      api:
+        condition: service_healthy
+  web:
+    build:
+      context: ./apps/web
+      args:
+        NEXT_API_ORIGIN: http://api:8000
+    ports:
+      - "3000:3000"
+    environment:
+      ADMIN_LOGIN_SLUG: ${ADMIN_LOGIN_SLUG:?Set ADMIN_LOGIN_SLUG to a random 32+ character URL-safe value}
+    depends_on:
+      api:
+        condition: service_healthy
+volumes:
+  postgres_data:
+  private_storage:
+  detector_models:

@@ -1,0 +1,8 @@
+# Execution plan
+
+1. **Backend:** remove wallet/ledger models and services, auth grant hooks, API balance route, admin adjustment, analysis gating/charging, and worker refunds. Keep guest session ownership, account security, rate limiting, and file validation. Add a migration that quarantines old wallet/ledger tables from application access and removes quota/device/IP fingerprint fields from guest sessions.
+2. **Frontend:** remove `CreditsProvider`, credits context/styles, upload gating/cost display, balance-related messages, and credit plan language. Preserve email verification and redirect behavior. Update privacy and operations documentation.
+3. **Model reliability:** check the pinned ONNX artifact and actual inference. Correct temporal cache resolution if it points away from configured weights. Load the temporal model only when trained weights match the supported architecture; otherwise return `unavailable` rather than infer from random weights.
+4. **Responsive QA:** inspect global and route styles, correct fixed widths/overflow, then run viewport checks on primary routes at 320, 360, 390, 768, 1024, 1440, 1920, and 3840 CSS pixels.
+5. **Vercel:** keep the app's same-origin `/api/*` proxy, reject missing/non-HTTPS `NEXT_API_ORIGIN` in Vercel builds, and document `apps/web` as the Vercel root plus the separately hosted API/worker and required backend configuration.
+6. **Verification:** run Alembic migration checks and API tests, detector-level inference checks, web lint/typecheck/build, and browser journeys. Capture actual outputs and any external limitation in `.gsd/JOURNAL.md`.
