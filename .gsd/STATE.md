@@ -1,9 +1,23 @@
 ---
 created: 2026-10-15T19:24:23Z
-status: complete
+status: in_progress
 ---
 
-# State Snapshot — Admin workforce and shared visual system
+# State Snapshot — Remaining audit gap closure
+
+## Current Progress
+
+- Item 1 complete: initialized `main`, added safe ignore rules, scanned readable source/config patterns, and committed baseline `3fe9157`.
+- Item 2 complete: backend baseline is 48 passed across six test files; ESLint, TypeScript, production build (25 static pages), and 11 Playwright cases passed. All required E2E ports are free.
+- The active `.env` and local user data were not read or staged. Ruff, live PostgreSQL RLS, video benchmarking, and local security audits remain.
+
+## Next
+
+Continue in order with the project-local Ruff setup, then the throwaway PostgreSQL/RLS audit, video benchmark, local security scans, and product-claim review. Keep all new evidence and exact commands in `.gsd/JOURNAL.md`.
+
+---
+
+# Previous Snapshot — Admin workforce and shared visual system
 
 ## Objective
 

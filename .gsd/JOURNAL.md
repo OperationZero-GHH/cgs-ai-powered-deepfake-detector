@@ -121,3 +121,27 @@ Remove the platform's point-credit system, validate both forensic model paths, i
 - `apps/api/tests/test_api.py`, `apps/api/tests/test_scanner.py`, `apps/api/tests/test_video_temporal.py`
 - `apps/web/src/components/auth-form.tsx`, `apps/web/src/components/account-recovery.tsx`, `apps/web/src/lib/navigation.ts`, `apps/web/e2e/user-journey.spec.ts`
 - `.gsd/JOURNAL.md`
+
+## Session: 2026-10-16 PKT — Remaining audit gaps
+
+### Item 1: Safe version control
+- Checked the project, Desktop, user-profile, and drive-root `.git` markers; none existed. Initialized this project on `main` and created baseline commit `3fe9157` (`chore(phase-1): capture audit baseline`).
+- Expanded `.gitignore` before staging to exclude environment files (except `.env.example`), generated output, local databases/media, E2E storage, model weights, logs, and OS junk. Confirmed `.env` is ignored and `.env.example` is included.
+- A high-confidence credential-pattern scan found no matches in readable source/config files or `.env.example`. The active `.env`, local data/media, generated directories, and binary/model files were excluded from scanning; `.env` was not read. No such files are in the baseline commit.
+- The initial source tree has pre-existing whitespace warnings in `.git diff --cached --check`; these were preserved in the baseline rather than mass-editing unrelated project files.
+
+### Verified Baseline
+- Reference commit: `3fe9157` (`main`); `git status --short` was clean after the commit and E2E run.
+- Backend: `apps/api/.venv/Scripts/python.exe -m pytest -q` exited 0; 48 tests collected and completed, with 48 passes, 0 failures, and 0 skips.
+- Collection by file (`pytest --collect-only -q`): `test_admin_workforce_migration.py` 1; `test_api.py` 35; `test_credit_retirement_migration.py` 1; `test_detector_model.py` 1; `test_scanner.py` 4; `test_video_temporal.py` 6 (48 total).
+- Frontend checks under bundled Node `v24.19.0`: ESLint passed; TypeScript `tsc --noEmit` passed.
+- Production build under Next.js `16.4.0`, `VERCEL=1`, and `NEXT_API_ORIGIN=https://api.example.test` passed; 25 of 25 static pages generated.
+- Playwright: 11 passed in 1.3 minutes. Ports 3000, 3100, 8000, 8001, and 8100 were free before the run and had no listeners after teardown.
+- Ruff was not installed at this baseline; live PostgreSQL RLS tests and dependency/code security audits remain for their ordered items below.
+
+### Pending items
+- Item 3: add pinned project-local Ruff development tooling and fix genuine findings.
+- Item 4: validate migrations and forced RLS against a disposable local PostgreSQL instance with a non-owner role.
+- Item 5: benchmark maximum and representative video limits and add evidence-based guard/regression coverage.
+- Item 6: run local dependency, code, and secret scanners; triage findings.
+- Item 7: review product claims and add the owner decision note for hardware credentials.
