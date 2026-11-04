@@ -7,7 +7,6 @@ import { motion } from "motion/react";
 import { Brand, Mark } from "@/components/brand";
 import { SmoothInput } from "@/components/smooth-input";
 import { Tooltip } from "@/components/tooltip";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { PhoneInput } from "@/components/phone-input";
 import { api, type User } from "@/lib/api";
 import { isSafeLocalPath } from "@/lib/navigation";
@@ -15,6 +14,7 @@ import { isSafeLocalPath } from "@/lib/navigation";
 export function AuthForm({ mode, audience = "user" }: { mode: "login" | "signup"; audience?: "user" | "admin" }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [initialEmail, setInitialEmail] = useState("");
   const [registrationEnabled, setRegistrationEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -51,9 +51,14 @@ export function AuthForm({ mode, audience = "user" }: { mode: "login" | "signup"
       return;
     }
     if (typeof window !== "undefined") {
-      const registered = new URLSearchParams(window.location.search).get("registered");
-      if (registered === "1") {
-        setNotice("Your account is ready. Verify your email to start analyzing media.");
+      const searchParams = new URLSearchParams(window.location.search);
+      const emailParam = searchParams.get("email");
+      if (emailParam) {
+        setInitialEmail(emailParam);
+      }
+      const registered = searchParams.get("registered");
+      if (registered === "1" || registered === "true") {
+        setNotice("Registration successful! Your account is active. Please enter your password to sign in.");
       }
     }
   }, [signup]);
@@ -124,7 +129,7 @@ export function AuthForm({ mode, audience = "user" }: { mode: "login" | "signup"
         window.dispatchEvent(new Event("cgs:auth-success"));
         const next = new URLSearchParams(window.location.search).get("next");
         const safeNext = isSafeLocalPath(next) ? next : "/app";
-        router.replace(`/verify-email?next=${encodeURIComponent(safeNext)}`);
+        router.replace(`/login?registered=1&email=${encodeURIComponent(email)}&next=${encodeURIComponent(safeNext)}`);
         return;
       }
 
@@ -162,7 +167,6 @@ export function AuthForm({ mode, audience = "user" }: { mode: "login" | "signup"
           <Link className="button button-secondary auth-back" href="/" aria-label="Back to home">
             <span aria-hidden="true">←</span> Back to home
           </Link>
-          <ThemeToggle />
         </div>
       </header>
 
@@ -392,9 +396,11 @@ export function AuthForm({ mode, audience = "user" }: { mode: "login" | "signup"
                   {signup ? "Email Address" : "Email or Username"}
                 </label>
                 <SmoothInput
+                  key={initialEmail}
                   id={`${formId}-email`}
                   name="email"
                   type="text"
+                  defaultValue={initialEmail}
                   autoComplete={signup ? "email" : "username"}
                   autoCapitalize="none"
                   spellCheck={false}

@@ -20,6 +20,7 @@ logger = logging.getLogger("cgs.temporal_detector")
 
 HF_MODEL_ID = "Naman712/Deep-fake-detection"
 HF_CHECKPOINT = "model_87_acc_20_frames_final_data.pt"
+HF_REVISION = "103847a47c2a1a335eeebed2f411d02ac83967b6"
 HF_TOKEN = os.getenv("HF_TOKEN", "")
 TEMPORAL_THRESHOLD = 0.60
 _FILE_DIR = Path(__file__).resolve().parent
@@ -50,7 +51,7 @@ class TemporalDeepfakeDetector:
     name = "temporal_resnext50_lstm"
     model_version = "naman712-resnext50-lstm-20f-v1"
 
-    def __init__(self, hf_token: str = "", cache_dir: Path | None = None):
+    def __init__(self, hf_token: str | None = None, cache_dir: Path | None = None):
         self._hf_token = hf_token or HF_TOKEN
         self._cache_dir = cache_dir or TEMPORAL_CACHE_DIR
         self._model = None
@@ -89,7 +90,9 @@ class TemporalDeepfakeDetector:
             model = self._build_model(nn, models)
             checkpoint = torch.load(checkpoint_path, map_location=self._device, weights_only=True)
             if isinstance(checkpoint, dict):
-                state_dict = checkpoint.get("state_dict", checkpoint.get("model_state_dict", checkpoint))
+                state_dict = checkpoint.get(
+                    "state_dict", checkpoint.get("model_state_dict", checkpoint)
+                )
             else:
                 raise TypeError("Checkpoint must contain a state dictionary.")
             cleaned = {key.removeprefix("module."): value for key, value in state_dict.items()}
@@ -98,7 +101,9 @@ class TemporalDeepfakeDetector:
 
             # Verify the architecture/checkpoint pair before reporting readiness.
             with torch.inference_mode():
-                _, logits = model(torch.zeros((1, SEQUENCE_LENGTH, 3, *INPUT_SIZE), dtype=torch.float32))
+                _, logits = model(
+                    torch.zeros((1, SEQUENCE_LENGTH, 3, *INPUT_SIZE), dtype=torch.float32)
+                )
             if tuple(logits.shape) != (1, 2) or not torch.isfinite(logits).all():
                 raise ValueError("Checkpoint smoke inference returned an invalid result.")
 
@@ -110,8 +115,11 @@ class TemporalDeepfakeDetector:
         except ImportError:
             self._unavailable_reason = "PyTorch and torchvision are required for video analysis."
         except Exception as exc:
-            # Do not print exception strings from model access; they may include credentials or URLs.
-            self._unavailable_reason = f"The trained temporal checkpoint could not be loaded ({type(exc).__name__})."
+            # Avoid exception strings from model access because they may include credentials.
+            # They can also expose signed or private URLs.
+            self._unavailable_reason = (
+                f"The trained temporal checkpoint could not be loaded ({type(exc).__name__})."
+            )
             logger.warning("Temporal checkpoint load failed (%s).", type(exc).__name__)
         self._available = False
         return False
@@ -129,16 +137,21 @@ class TemporalDeepfakeDetector:
             from huggingface_hub import hf_hub_download
 
             self._cache_dir.mkdir(parents=True, exist_ok=True)
-            path = Path(hf_hub_download(
-                repo_id=HF_MODEL_ID,
-                filename=HF_CHECKPOINT,
-                token=self._hf_token or None,
-                cache_dir=str(self._cache_dir),
-                local_dir=str(self._cache_dir),
-            ))
+            path = Path(
+                hf_hub_download(
+                    repo_id=HF_MODEL_ID,
+                    filename=HF_CHECKPOINT,
+                    revision=HF_REVISION,
+                    token=self._hf_token or None,
+                    cache_dir=str(self._cache_dir),
+                    local_dir=str(self._cache_dir),
+                )
+            )
             return path if path.is_file() and path.stat().st_size > 1_000_000 else None
         except ImportError:
-            self._unavailable_reason = "huggingface_hub is required to download the video checkpoint."
+            self._unavailable_reason = (
+                "huggingface_hub is required to download the video checkpoint."
+            )
         except Exception as exc:
             logger.warning("Temporal checkpoint download failed (%s).", type(exc).__name__)
         return None
@@ -239,18 +252,29 @@ class TemporalDeepfakeDetector:
                 "model_id": HF_MODEL_ID,
                 "model_version": self.model_version,
                 "layer": "temporal",
-                "label": "ai_generated_signal" if fake_score >= TEMPORAL_THRESHOLD else "no_strong_ai_signal",
+                "label": "ai_generated_signal"
+                if fake_score >= TEMPORAL_THRESHOLD
+                else "no_strong_ai_signal",
                 "score": round(fake_score, 6),
                 "temporal_lstm_score": round(fake_score, 6),
                 "frames_processed": min(len(frame_jpeg_list), SEQUENCE_LENGTH),
                 "sequence_length": SEQUENCE_LENGTH,
                 "threshold": TEMPORAL_THRESHOLD,
-                "score_semantics": "Softmax score for the model's fake class; not a calibrated probability.",
+                "score_semantics": (
+                    "Softmax score for the model's fake class; not a calibrated probability."
+                ),
                 "latency_ms": round((time.perf_counter() - started) * 1000),
                 "limitations": (
-                    "The publisher trained this detector primarily for human-face videos; it may be less reliable without clear faces or with low resolution, heavy compression, or motion blur.",
+                    (
+                        "The publisher trained this detector primarily for human-face videos; "
+                        "it may be less reliable without clear faces or with low resolution, "
+                        "heavy compression, or motion blur."
+                    ),
                     "This detector may not generalize to every manipulation type.",
-                    "The score is a model output, not proof of authenticity or population-calibrated probability.",
+                    (
+                        "The score is a model output, not proof of authenticity or "
+                        "population-calibrated probability."
+                    ),
                 ),
             }
         except Exception as exc:
@@ -260,9 +284,14 @@ class TemporalDeepfakeDetector:
                 "provider": self.name,
                 "layer": "temporal",
                 "latency_ms": round((time.perf_counter() - started) * 1000),
-                "limitations": (f"Temporal inference failed ({type(exc).__name__}); no temporal score was produced.",),
+                "limitations": (
+                    f"Temporal inference failed ({type(exc).__name__}); "
+                    "no temporal score was produced.",
+                ),
             }
 
 
-def create_temporal_detector(hf_token: str = "", cache_dir: Path | None = None) -> TemporalDeepfakeDetector:
+def create_temporal_detector(
+    hf_token: str | None = None, cache_dir: Path | None = None
+) -> TemporalDeepfakeDetector:
     return TemporalDeepfakeDetector(hf_token=hf_token, cache_dir=cache_dir)

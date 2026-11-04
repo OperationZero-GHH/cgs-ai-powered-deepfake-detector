@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "0007_repair_adopted_schema"
 down_revision = "0006_retire_credits"
@@ -37,7 +36,9 @@ def _ensure_index(table: str, name: str, columns: list[str], *, unique: bool = F
             if constraint["column_names"] == columns:
                 return
     if name in {index["name"] for index in inspector.get_indexes(table)}:
-        raise RuntimeError(f"Cannot repair {table}: index {name} exists with a different definition.")
+        raise RuntimeError(
+            f"Cannot repair {table}: index {name} exists with a different definition."
+        )
     op.create_index(name, table, columns, unique=unique)
 
 
@@ -46,11 +47,21 @@ def _ensure_user_auth_columns() -> None:
     email_verified_was_added = "email_verified_at" not in existing
     additions = {
         "email_identity": sa.Column("email_identity", sa.String(length=320), nullable=True),
-        "email_verified_at": sa.Column("email_verified_at", sa.DateTime(timezone=True), nullable=True),
-        "email_verification_token_hash": sa.Column("email_verification_token_hash", sa.String(length=64), nullable=True),
-        "email_verification_expires_at": sa.Column("email_verification_expires_at", sa.DateTime(timezone=True), nullable=True),
-        "password_reset_token_hash": sa.Column("password_reset_token_hash", sa.String(length=64), nullable=True),
-        "password_reset_expires_at": sa.Column("password_reset_expires_at", sa.DateTime(timezone=True), nullable=True),
+        "email_verified_at": sa.Column(
+            "email_verified_at", sa.DateTime(timezone=True), nullable=True
+        ),
+        "email_verification_token_hash": sa.Column(
+            "email_verification_token_hash", sa.String(length=64), nullable=True
+        ),
+        "email_verification_expires_at": sa.Column(
+            "email_verification_expires_at", sa.DateTime(timezone=True), nullable=True
+        ),
+        "password_reset_token_hash": sa.Column(
+            "password_reset_token_hash", sa.String(length=64), nullable=True
+        ),
+        "password_reset_expires_at": sa.Column(
+            "password_reset_expires_at", sa.DateTime(timezone=True), nullable=True
+        ),
     }
     missing = [column for name, column in additions.items() if name not in existing]
     if missing:
@@ -60,10 +71,12 @@ def _ensure_user_auth_columns() -> None:
 
     bind = op.get_bind()
     seen: set[str] = set()
-    rows = bind.execute(sa.text(
-        "SELECT id, email, created_at, email_identity, email_verified_at "
-        "FROM users ORDER BY created_at, id"
-    )).mappings()
+    rows = bind.execute(
+        sa.text(
+            "SELECT id, email, created_at, email_identity, email_verified_at "
+            "FROM users ORDER BY created_at, id"
+        )
+    ).mappings()
     for row in rows:
         identity = (row["email_identity"] or "").strip()
         if not identity:
@@ -87,10 +100,14 @@ def _ensure_user_auth_columns() -> None:
     user_columns = _columns("users")
     if user_columns["email_identity"]["nullable"]:
         with op.batch_alter_table("users") as batch:
-            batch.alter_column("email_identity", existing_type=sa.String(length=320), nullable=False)
+            batch.alter_column(
+                "email_identity", existing_type=sa.String(length=320), nullable=False
+            )
 
     _ensure_index("users", "ix_users_email_identity", ["email_identity"], unique=True)
-    _ensure_index("users", "ix_users_email_verification_token_hash", ["email_verification_token_hash"])
+    _ensure_index(
+        "users", "ix_users_email_verification_token_hash", ["email_verification_token_hash"]
+    )
     _ensure_index("users", "ix_users_password_reset_token_hash", ["password_reset_token_hash"])
 
 
@@ -122,7 +139,11 @@ def _ensure_analysis_guest_columns() -> None:
                 batch.alter_column("owner_id", existing_type=sa.String(length=36), nullable=True)
             if not guest_foreign_key_exists:
                 batch.create_foreign_key(
-                    "fk_analyses_guest_id", "guest_sessions", ["guest_id"], ["guest_id"], ondelete="CASCADE"
+                    "fk_analyses_guest_id",
+                    "guest_sessions",
+                    ["guest_id"],
+                    ["guest_id"],
+                    ondelete="CASCADE",
                 )
             if not owner_check_exists:
                 batch.create_check_constraint(
@@ -136,7 +157,10 @@ def _ensure_analysis_guest_columns() -> None:
         "analyses", "uq_analyses_user_idempotency_key", ["owner_id", "idempotency_key"], unique=True
     )
     _ensure_index(
-        "analyses", "uq_analyses_guest_idempotency_key", ["guest_id", "idempotency_key"], unique=True
+        "analyses",
+        "uq_analyses_guest_idempotency_key",
+        ["guest_id", "idempotency_key"],
+        unique=True,
     )
 
 
@@ -145,11 +169,18 @@ def _retire_legacy_credit_tables() -> None:
     live_tables = {"credit_wallets", "credit_transactions"}.intersection(tables)
     retired_tables = {"retired_usage_wallets", "retired_usage_transactions"}.intersection(tables)
     if live_tables and retired_tables:
-        raise RuntimeError("Both live and retired credit ledger tables exist; refusing to overwrite historical data.")
+        raise RuntimeError(
+            "Both live and retired credit ledger tables exist; refusing to overwrite "
+            "historical data."
+        )
     if live_tables and live_tables != {"credit_wallets", "credit_transactions"}:
-        raise RuntimeError("The live credit ledger is incomplete; refusing to rename only part of its history.")
+        raise RuntimeError(
+            "The live credit ledger is incomplete; refusing to rename only part of its history."
+        )
     if retired_tables and retired_tables != {"retired_usage_wallets", "retired_usage_transactions"}:
-        raise RuntimeError("The retired credit ledger is incomplete; refusing to change its history.")
+        raise RuntimeError(
+            "The retired credit ledger is incomplete; refusing to change its history."
+        )
 
     bind = op.get_bind()
     if bind.dialect.name == "sqlite":
@@ -158,7 +189,9 @@ def _retire_legacy_credit_tables() -> None:
     elif bind.dialect.name == "postgresql":
         if "credit_transactions" in tables:
             op.execute("DROP POLICY IF EXISTS credit_transactions_access ON credit_transactions")
-            op.execute("DROP TRIGGER IF EXISTS credit_transactions_immutable ON credit_transactions")
+            op.execute(
+                "DROP TRIGGER IF EXISTS credit_transactions_immutable ON credit_transactions"
+            )
         if "credit_wallets" in tables:
             op.execute("DROP POLICY IF EXISTS credit_wallets_access ON credit_wallets")
         op.execute("DROP FUNCTION IF EXISTS reject_credit_ledger_mutation()")
@@ -182,7 +215,9 @@ def _remove_guest_quota_fields() -> None:
     if "guest_sessions" not in set(sa.inspect(op.get_bind()).get_table_names()):
         return
     existing = _columns("guest_sessions")
-    retired = {"ip_hash", "ip_subnet_hash", "fingerprint_hash", "verifications_used"}.intersection(existing)
+    retired = {"ip_hash", "ip_subnet_hash", "fingerprint_hash", "verifications_used"}.intersection(
+        existing
+    )
     if not retired:
         return
     for index in sa.inspect(op.get_bind()).get_indexes("guest_sessions"):
@@ -199,47 +234,130 @@ def _repair_postgres_policies() -> None:
 
     policies = {
         "users": {
-            "users_select_self_or_auth": "FOR SELECT USING (current_setting('cgs.actor', true) IN ('admin','auth') OR id = NULLIF(current_setting('cgs.user_id', true), ''))",
-            "users_insert_auth_or_admin": "FOR INSERT WITH CHECK (current_setting('cgs.actor', true) IN ('admin','auth'))",
-            "users_update_auth_or_admin": "FOR UPDATE USING (current_setting('cgs.actor', true) IN ('admin','auth')) WITH CHECK (current_setting('cgs.actor', true) IN ('admin','auth'))",
-            "users_delete_self_or_admin": "FOR DELETE USING (current_setting('cgs.actor', true) = 'admin' OR id = NULLIF(current_setting('cgs.user_id', true), ''))",
+            "users_select_self_or_auth": (
+                "FOR SELECT USING (current_setting('cgs.actor', "
+                "true) IN ('admin','auth') OR id = NULLIF(current_setting('cgs.user_id', "
+                "true), ''))"
+            ),
+            "users_insert_auth_or_admin": (
+                "FOR INSERT WITH CHECK (current_setting('cgs.actor', true) IN ('admin','auth'))"
+            ),
+            "users_update_auth_or_admin": (
+                "FOR UPDATE USING (current_setting('cgs.actor', "
+                "true) IN ('admin','auth')) WITH CHECK (current_setting('cgs.actor', true) IN "
+                "('admin','auth'))"
+            ),
+            "users_delete_self_or_admin": (
+                "FOR DELETE USING (current_setting('cgs.actor', "
+                "true) = 'admin' OR id = NULLIF(current_setting('cgs.user_id', true), ''))"
+            ),
         },
         "sessions": {
-            "sessions_select_self_or_admin": "FOR SELECT USING (current_setting('cgs.actor', true) = 'admin' OR user_id = NULLIF(current_setting('cgs.user_id', true), '') OR token_hash = NULLIF(current_setting('cgs.session_hash', true), ''))",
-            "sessions_insert_self_or_admin": "FOR INSERT WITH CHECK (current_setting('cgs.actor', true) = 'admin' OR user_id = NULLIF(current_setting('cgs.user_id', true), ''))",
-            "sessions_update_self_or_admin": "FOR UPDATE USING (current_setting('cgs.actor', true) = 'admin' OR user_id = NULLIF(current_setting('cgs.user_id', true), '')) WITH CHECK (current_setting('cgs.actor', true) = 'admin' OR user_id = NULLIF(current_setting('cgs.user_id', true), ''))",
-            "sessions_delete_self_or_admin": "FOR DELETE USING (current_setting('cgs.actor', true) = 'admin' OR user_id = NULLIF(current_setting('cgs.user_id', true), ''))",
+            "sessions_select_self_or_admin": (
+                "FOR SELECT USING "
+                "(current_setting('cgs.actor', true) = 'admin' OR user_id = "
+                "NULLIF(current_setting('cgs.user_id', true), '') OR token_hash = "
+                "NULLIF(current_setting('cgs.session_hash', true), ''))"
+            ),
+            "sessions_insert_self_or_admin": (
+                "FOR INSERT WITH CHECK "
+                "(current_setting('cgs.actor', true) = 'admin' OR user_id = "
+                "NULLIF(current_setting('cgs.user_id', true), ''))"
+            ),
+            "sessions_update_self_or_admin": (
+                "FOR UPDATE USING "
+                "(current_setting('cgs.actor', true) = 'admin' OR user_id = "
+                "NULLIF(current_setting('cgs.user_id', true), '')) WITH CHECK "
+                "(current_setting('cgs.actor', true) = 'admin' OR user_id = "
+                "NULLIF(current_setting('cgs.user_id', true), ''))"
+            ),
+            "sessions_delete_self_or_admin": (
+                "FOR DELETE USING "
+                "(current_setting('cgs.actor', true) = 'admin' OR user_id = "
+                "NULLIF(current_setting('cgs.user_id', true), ''))"
+            ),
         },
         "analyses": {
-            "analyses_owner_or_service": "FOR ALL USING (current_setting('cgs.actor', true) IN ('admin','worker') OR owner_id = NULLIF(current_setting('cgs.user_id', true), '') OR guest_id = NULLIF(current_setting('cgs.guest_id', true), '')) WITH CHECK (current_setting('cgs.actor', true) IN ('admin','worker') OR owner_id = NULLIF(current_setting('cgs.user_id', true), '') OR guest_id = NULLIF(current_setting('cgs.guest_id', true), ''))",
+            "analyses_owner_or_service": (
+                "FOR ALL USING (current_setting('cgs.actor', true) "
+                "IN ('admin','worker') OR owner_id = NULLIF(current_setting('cgs.user_id', "
+                "true), '') OR guest_id = NULLIF(current_setting('cgs.guest_id', true), '')) "
+                "WITH CHECK (current_setting('cgs.actor', true) IN ('admin','worker') OR "
+                "owner_id = NULLIF(current_setting('cgs.user_id', true), '') OR guest_id = "
+                "NULLIF(current_setting('cgs.guest_id', true), ''))"
+            ),
         },
         "inference_jobs": {
-            "inference_jobs_owner_or_service": "FOR ALL USING (current_setting('cgs.actor', true) IN ('admin','worker') OR EXISTS (SELECT 1 FROM analyses a WHERE a.id=inference_jobs.analysis_id AND (a.owner_id=NULLIF(current_setting('cgs.user_id', true), '') OR a.guest_id=NULLIF(current_setting('cgs.guest_id', true), '')))) WITH CHECK (current_setting('cgs.actor', true) IN ('admin','worker') OR EXISTS (SELECT 1 FROM analyses a WHERE a.id=inference_jobs.analysis_id AND (a.owner_id=NULLIF(current_setting('cgs.user_id', true), '') OR a.guest_id=NULLIF(current_setting('cgs.guest_id', true), ''))))",
+            "inference_jobs_owner_or_service": (
+                "FOR ALL USING (current_setting('cgs.actor', "
+                "true) IN ('admin','worker') OR EXISTS (SELECT 1 FROM analyses a WHERE "
+                "a.id=inference_jobs.analysis_id AND "
+                "(a.owner_id=NULLIF(current_setting('cgs.user_id', true), '') OR "
+                "a.guest_id=NULLIF(current_setting('cgs.guest_id', true), '')))) WITH CHECK "
+                "(current_setting('cgs.actor', true) IN ('admin','worker') OR EXISTS (SELECT "
+                "1 FROM analyses a WHERE a.id=inference_jobs.analysis_id AND "
+                "(a.owner_id=NULLIF(current_setting('cgs.user_id', true), '') OR "
+                "a.guest_id=NULLIF(current_setting('cgs.guest_id', true), ''))))"
+            ),
         },
         "audit_events": {
-            "audit_events_admin_only": "FOR ALL USING (current_setting('cgs.actor', true) = 'admin') WITH CHECK (current_setting('cgs.actor', true) = 'admin')",
+            "audit_events_admin_only": (
+                "FOR ALL USING (current_setting('cgs.actor', true) = "
+                "'admin') WITH CHECK (current_setting('cgs.actor', true) = 'admin')"
+            ),
         },
         "guest_sessions": {
-            "guest_sessions_access": "FOR ALL USING (current_setting('cgs.actor', true) IN ('admin','auth','worker') OR guest_id = NULLIF(current_setting('cgs.guest_id', true), '')) WITH CHECK (current_setting('cgs.actor', true) IN ('admin','auth','worker') OR guest_id = NULLIF(current_setting('cgs.guest_id', true), ''))",
+            "guest_sessions_access": (
+                "FOR ALL USING (current_setting('cgs.actor', true) IN "
+                "('admin','auth','worker') OR guest_id = "
+                "NULLIF(current_setting('cgs.guest_id', true), '')) WITH CHECK "
+                "(current_setting('cgs.actor', true) IN ('admin','auth','worker') OR guest_id "
+                "= NULLIF(current_setting('cgs.guest_id', true), ''))"
+            ),
         },
         "ip_account_links": {
-            "ip_account_links_admin_auth": "FOR ALL USING (current_setting('cgs.actor', true) IN ('admin','auth')) WITH CHECK (current_setting('cgs.actor', true) IN ('admin','auth'))",
+            "ip_account_links_admin_auth": (
+                "FOR ALL USING (current_setting('cgs.actor', "
+                "true) IN ('admin','auth')) WITH CHECK (current_setting('cgs.actor', true) IN "
+                "('admin','auth'))"
+            ),
         },
         "ip_blocks": {
-            "ip_blocks_admin_auth": "FOR ALL USING (current_setting('cgs.actor', true) IN ('admin','auth')) WITH CHECK (current_setting('cgs.actor', true) IN ('admin','auth'))",
+            "ip_blocks_admin_auth": (
+                "FOR ALL USING (current_setting('cgs.actor', true) IN "
+                "('admin','auth')) WITH CHECK (current_setting('cgs.actor', true) IN "
+                "('admin','auth'))"
+            ),
         },
         "ip_whitelist": {
-            "ip_whitelist_admin_auth": "FOR ALL USING (current_setting('cgs.actor', true) IN ('admin','auth')) WITH CHECK (current_setting('cgs.actor', true) IN ('admin','auth'))",
+            "ip_whitelist_admin_auth": (
+                "FOR ALL USING (current_setting('cgs.actor', true) "
+                "IN ('admin','auth')) WITH CHECK (current_setting('cgs.actor', true) IN "
+                "('admin','auth'))"
+            ),
         },
         "unblock_requests": {
-            "unblock_requests_admin_auth": "FOR ALL USING (current_setting('cgs.actor', true) IN ('admin','auth')) WITH CHECK (current_setting('cgs.actor', true) IN ('admin','auth'))",
+            "unblock_requests_admin_auth": (
+                "FOR ALL USING (current_setting('cgs.actor', "
+                "true) IN ('admin','auth')) WITH CHECK (current_setting('cgs.actor', true) IN "
+                "('admin','auth'))"
+            ),
         },
         "ip_enforcement_guards": {
-            "ip_enforcement_guards_service": "FOR ALL USING (current_setting('cgs.actor', true) IN ('admin','auth','guest')) WITH CHECK (current_setting('cgs.actor', true) IN ('admin','auth','guest'))",
+            "ip_enforcement_guards_service": (
+                "FOR ALL USING (current_setting('cgs.actor', "
+                "true) IN ('admin','auth','guest')) WITH CHECK (current_setting('cgs.actor', "
+                "true) IN ('admin','auth','guest'))"
+            ),
         },
         "access_audit_events": {
-            "access_audit_insert": "FOR INSERT WITH CHECK (current_setting('cgs.actor', true) IN ('admin','auth','guest','worker'))",
-            "access_audit_select": "FOR SELECT USING (current_setting('cgs.actor', true) = 'admin')",
+            "access_audit_insert": (
+                "FOR INSERT WITH CHECK (current_setting('cgs.actor', "
+                "true) IN ('admin','auth','guest','worker'))"
+            ),
+            "access_audit_select": (
+                "FOR SELECT USING (current_setting('cgs.actor', true) = 'admin')"
+            ),
         },
     }
 
@@ -258,7 +376,9 @@ def _repair_postgres_policies() -> None:
 def upgrade() -> None:
     tables = set(sa.inspect(op.get_bind()).get_table_names())
     if not {"users", "analyses", "guest_sessions"}.issubset(tables):
-        raise RuntimeError("Cannot repair the adopted schema because a required authentication table is missing.")
+        raise RuntimeError(
+            "Cannot repair the adopted schema because a required authentication table is missing."
+        )
 
     _ensure_user_auth_columns()
     _ensure_analysis_guest_columns()

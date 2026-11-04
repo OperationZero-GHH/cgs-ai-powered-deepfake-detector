@@ -25,8 +25,39 @@ export class ApiError extends Error {
   }
 }
 
+export type ModelBreakdown = {
+  name: string;
+  version: string;
+  p_fake: number;
+  calibrated_score?: number;
+  weight?: number;
+  ok: boolean;
+  latency_ms?: number;
+  error?: string | null;
+  label_map_used?: Record<string, string>;
+};
+
+export type AudioBreakdown = {
+  p_fake: number;
+  duration_seconds: number;
+  windows_analyzed: number;
+  windows_flagged: number;
+  flag_fraction: number;
+  ok: boolean;
+  error?: string | null;
+  insufficient_audio?: boolean;
+};
+
 export type Analysis = {
   analysis_id: string;
+  job_id?: string;
+  media_type?: "image" | "video" | "audio";
+  verdict?: "likely_authentic" | "inconclusive" | "likely_manipulated";
+  confidence_band?: "low" | "medium" | "high";
+  score?: number;
+  models?: ModelBreakdown[];
+  audio?: AudioBreakdown | null;
+  frames_analyzed?: number;
   status: string;
   created_at: string;
   completed_at: string | null;
@@ -40,6 +71,7 @@ export type Analysis = {
     image_url: string | null;
     media_url?: string | null;
     is_video?: boolean;
+    is_audio?: boolean;
   };
   summary: {
     classification: string;

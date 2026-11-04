@@ -1,24 +1,27 @@
 import type { NextConfig } from "next";
 
+const isVercel = process.env.VERCEL === "1";
+// On Vercel with Services, the platform-level rewrite routes /api/* to the api
+// service directly. NEXT_API_ORIGIN is only used for local development without
+// `vercel dev`.
 const configuredApiOrigin = process.env.NEXT_API_ORIGIN;
-if (process.env.VERCEL === "1" && !configuredApiOrigin) {
-  throw new Error("NEXT_API_ORIGIN must be configured for Vercel deployments.");
-}
 const apiOrigin = configuredApiOrigin ?? "http://127.0.0.1:8000";
-try {
-  const parsedApiOrigin = new URL(apiOrigin);
-  const isOriginOnly = parsedApiOrigin.pathname === "/" && !parsedApiOrigin.search && !parsedApiOrigin.hash;
-  if (!isOriginOnly || parsedApiOrigin.username || parsedApiOrigin.password) {
-    throw new Error("NEXT_API_ORIGIN must contain only an API origin, without a path or credentials.");
+if (configuredApiOrigin) {
+  try {
+    const parsedApiOrigin = new URL(apiOrigin);
+    const isOriginOnly = parsedApiOrigin.pathname === "/" && !parsedApiOrigin.search && !parsedApiOrigin.hash;
+    if (!isOriginOnly || parsedApiOrigin.username || parsedApiOrigin.password) {
+      throw new Error("NEXT_API_ORIGIN must contain only an API origin, without a path or credentials.");
+    }
+    if (isVercel && parsedApiOrigin.protocol !== "https:") {
+      throw new Error("NEXT_API_ORIGIN must use HTTPS on Vercel.");
+    }
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error("NEXT_API_ORIGIN must be an absolute URL.");
+    }
+    throw error;
   }
-  if (process.env.VERCEL === "1" && parsedApiOrigin.protocol !== "https:") {
-    throw new Error("NEXT_API_ORIGIN must use HTTPS on Vercel.");
-  }
-} catch (error) {
-  if (error instanceof TypeError) {
-    throw new Error("NEXT_API_ORIGIN must be an absolute URL.");
-  }
-  throw error;
 }
 const developmentEval = process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
 const productionHsts = process.env.NODE_ENV === "production"
@@ -50,6 +53,11 @@ const nextConfig: NextConfig = {
     }];
   },
   async rewrites() {
+    if (isVercel) {
+      // On Vercel with Services, the platform-level rewrite in vercel.json
+      // routes /api/* to the api service. No Next.js rewrite needed.
+      return [];
+    }
     return [{ source: "/api/:path*", destination: `${apiOrigin}/api/:path*` }];
   },
   async redirects() {

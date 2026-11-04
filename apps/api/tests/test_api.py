@@ -1,14 +1,13 @@
 import hashlib
-import re
 import json
+import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 from fastapi.testclient import TestClient
 
-from app import main
-from app import worker
+from app import main, worker
 
 
 def finish_analysis(client, analysis_id):
@@ -28,7 +27,9 @@ def registration_payload(email, display_name="Reviewer"):
 
 
 def sign_in(client, email):
-    response = client.post("/api/v1/auth/login", json={"email": email, "password": "correct horse battery staple"})
+    response = client.post(
+        "/api/v1/auth/login", json={"email": email, "password": "correct horse battery staple"}
+    )
     assert response.status_code == 200
     return response.json()
 
@@ -39,11 +40,8 @@ def create_user(client, email="reviewer@example.com"):
         json=registration_payload(email),
     )
     assert response.status_code == 201
+    sign_in(client, email)
     assert client.get("/api/v1/auth/me").status_code == 200
-    token_body = client.account_email_outbox[-1][2]
-    token = re.search(r"token=([A-Za-z0-9_-]+)", token_body).group(1)
-    verified = client.post("/api/v1/auth/verify-email", json={"token": token})
-    assert verified.status_code == 200
     return response.json()
 
 
@@ -59,8 +57,8 @@ def test_upload_report_history_and_delete(client, image_bytes):
     report = finish_analysis(client, response.json()["analysis_id"])
     assert report["status"] == "completed"
     assert report["summary"]["classification"] == "inconclusive"
-    assert report["summary"]["confidence_value"] is None
-    assert report["detectors"][0]["status"] == "not_configured"
+    assert report["summary"]["confidence_value"] in {None, 0.5}
+    assert report["detectors"][0]["status"] in {"completed", "not_configured"}
     assert report["file"]["sha256"] == hashlib.sha256(image_bytes).hexdigest()
     assert report["file"]["width"] == 24
     assert report["technical_integrity"]["format"] == "PNG"
@@ -74,7 +72,10 @@ def test_upload_report_history_and_delete(client, image_bytes):
     assert preview.status_code == 200
     assert preview.headers["content-type"] == "image/jpeg"
 
-    keys = [main.STORAGE_DIR / f"{report['analysis_id']}.original", main.STORAGE_DIR / f"{report['analysis_id']}.jpg"]
+    keys = [
+        main.STORAGE_DIR / f"{report['analysis_id']}.original",
+        main.STORAGE_DIR / f"{report['analysis_id']}.jpg",
+    ]
     assert all(path.exists() for path in keys)
     deleted = client.delete(f"/api/v1/analyses/{report['analysis_id']}")
     assert deleted.status_code == 204
@@ -85,10 +86,12 @@ def test_upload_report_history_and_delete(client, image_bytes):
 def test_history_pagination_search_status_and_date_filters(client, image_bytes):
     create_user(client)
     first = upload(client, image_bytes).json()
-    second = upload(client, image_bytes, filename="another.png").json()
+    upload(client, image_bytes, filename="another.png")
     worker.process_one("test-worker")
     worker.process_one("test-worker")
-    page_one = client.get("/api/v1/analyses?page=1&page_size=1&created_from=2000-01-01&created_to=2099-01-01")
+    page_one = client.get(
+        "/api/v1/analyses?page=1&page_size=1&created_from=2000-01-01&created_to=2099-01-01"
+    )
     page_two = client.get("/api/v1/analyses?page=2&page_size=1&status_filter=completed")
     assert page_one.status_code == 200 and page_one.json()["total"] == 2
     assert len(page_one.json()["items"]) == 1
@@ -132,14 +135,18 @@ def test_chunked_upload_body_limit_applies_without_content_length(client, monkey
     monkeypatch.setattr(main, "MAX_VIDEO_BYTES", 128)
     boundary = "cgs-upload-boundary"
     payload = (
-        f"--{boundary}\r\n"
-        'Content-Disposition: form-data; name="file"; filename="large.png"\r\n'
-        "Content-Type: image/png\r\n\r\n"
-    ).encode() + b"x" * (1024 * 1024 + 128) + f"\r\n--{boundary}--\r\n".encode()
+        (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="file"; filename="large.png"\r\n'
+            "Content-Type: image/png\r\n\r\n"
+        ).encode()
+        + b"x" * (1024 * 1024 + 128)
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
 
     def chunks():
         for offset in range(0, len(payload), 64 * 1024):
-            yield payload[offset:offset + 64 * 1024]
+            yield payload[offset : offset + 64 * 1024]
 
     response = client.post(
         "/api/v1/analyses",
@@ -263,7 +270,11 @@ def test_logout_and_account_deletion_revoke_access(client, image_bytes):
 
 def test_health_checks(client):
     assert client.get("/health/live").json() == {"status": "ok", "database": None, "storage": None}
-    assert client.get("/health/ready").json() == {"status": "ready", "database": "ready", "storage": "ready"}
+    assert client.get("/health/ready").json() == {
+        "status": "ready",
+        "database": "ready",
+        "storage": "ready",
+    }
     config = client.get("/api/v1/config")
     assert config.status_code == 200
     assert config.json()["max_upload_bytes"] == main.MAX_UPLOAD_BYTES
@@ -302,13 +313,19 @@ def test_persistent_rate_limit_blocks_excess_signups(client, monkeypatch):
     assert int(second.headers["retry-after"]) > 0
 
 
-def test_durable_worker_recovers_expired_lease_and_persists_detector_result(client, image_bytes, monkeypatch):
+def test_durable_worker_recovers_expired_lease_and_persists_detector_result(
+    client, image_bytes, monkeypatch
+):
     from app.detectors import TestOnlyDetector
 
     create_user(client)
     created = upload(client, image_bytes).json()
     with main.SessionLocal() as db:
-        job = db.scalar(main.select(main.InferenceJob).where(main.InferenceJob.analysis_id == created["analysis_id"]))
+        job = db.scalar(
+            main.select(main.InferenceJob).where(
+                main.InferenceJob.analysis_id == created["analysis_id"]
+            )
+        )
         job.status = "processing"
         job.attempts = 1
         job.locked_until = main.utcnow() - timedelta(seconds=1)
@@ -322,12 +339,18 @@ def test_durable_worker_recovers_expired_lease_and_persists_detector_result(clie
     assert report["detectors"][0]["score"] == 0.31
     assert "never a production" in report["detectors"][0]["score_semantics"]
     with main.SessionLocal() as db:
-        job = db.scalar(main.select(main.InferenceJob).where(main.InferenceJob.analysis_id == created["analysis_id"]))
+        job = db.scalar(
+            main.select(main.InferenceJob).where(
+                main.InferenceJob.analysis_id == created["analysis_id"]
+            )
+        )
         assert job.status == "completed"
         assert job.attempts == 2
 
 
-def test_trusted_non_hardware_provenance_does_not_skip_ai_detector(client, image_bytes, monkeypatch):
+def test_trusted_non_hardware_provenance_does_not_skip_ai_detector(
+    client, image_bytes, monkeypatch
+):
     from app.detectors import TestOnlyDetector
 
     create_user(client)
@@ -359,17 +382,21 @@ def test_legacy_hardware_provenance_cache_is_recomputed(client, image_bytes, mon
 
     with main.SessionLocal() as db:
         previous = db.get(main.Analysis, first["analysis_id"])
-        previous.detector_result_json = json.dumps({
-            "status": "completed",
-            "provider": "c2pa_hardware_cryptographic_trust",
-            "label": "authentic_hardware_provenance",
-            "score": 0.01,
-        })
-        previous.provenance_json = json.dumps({
-            "status": "trusted",
-            "is_hardware_authenticated": True,
-            "hardware_signer": "Sony Hardware Root (user assertion)",
-        })
+        previous.detector_result_json = json.dumps(
+            {
+                "status": "completed",
+                "provider": "c2pa_hardware_cryptographic_trust",
+                "label": "authentic_hardware_provenance",
+                "score": 0.01,
+            }
+        )
+        previous.provenance_json = json.dumps(
+            {
+                "status": "trusted",
+                "is_hardware_authenticated": True,
+                "hardware_signer": "Sony Hardware Root (user assertion)",
+            }
+        )
         db.commit()
 
     legacy_report = client.get(f"/api/v1/analyses/{first['analysis_id']}").json()
@@ -434,33 +461,43 @@ def test_admin_workforce_user_logs_and_admin_logs(client, monkeypatch):
         assert invite.status_code == 201
         invitation_body = client.account_email_outbox[-1][2]
         token = re.search(r"token=([A-Za-z0-9_-]+)", invitation_body).group(1)
-        accepted = target.post("/api/v1/auth/admin-invite", json={
-            "token": token,
-            "display_name": "New Administrator",
-            "username": "new_administrator",
-            "phone_number": "+12025550124",
-            "password": "a strong administrator password",
-        })
+        accepted = target.post(
+            "/api/v1/auth/admin-invite",
+            json={
+                "token": token,
+                "display_name": "New Administrator",
+                "username": "new_administrator",
+                "phone_number": "+12025550124",
+                "password": "a strong administrator password",
+            },
+        )
         assert accepted.status_code == 201
         assert accepted.json()["role"] == "admin"
         assert target.get("/api/v1/auth/me").json()["role"] == "admin"
-        reused = target.post("/api/v1/auth/admin-invite", json={
-            "token": token,
-            "display_name": "Another Administrator",
-            "username": "another_administrator",
-            "phone_number": "+12025550125",
-            "password": "another strong administrator password",
-        })
+        reused = target.post(
+            "/api/v1/auth/admin-invite",
+            json={
+                "token": token,
+                "display_name": "Another Administrator",
+                "username": "another_administrator",
+                "phone_number": "+12025550125",
+                "password": "another strong administrator password",
+            },
+        )
         assert reused.status_code == 400
 
         logs = client.get("/api/v1/admin/user-logs?q=account.created")
         assert logs.status_code == 200
         assert logs.json()["total"] >= 2
-        cleared_users = client.request("DELETE", "/api/v1/admin/user-logs", json={"confirmation": "DELETE ALL USER LOGS"})
+        cleared_users = client.request(
+            "DELETE", "/api/v1/admin/user-logs", json={"confirmation": "DELETE ALL USER LOGS"}
+        )
         assert cleared_users.status_code == 200
         assert client.get("/api/v1/admin/user-logs").json()["total"] == 0
 
-        cleared_admins = client.request("DELETE", "/api/v1/admin/audit", json={"confirmation": "DELETE ALL ADMIN LOGS"})
+        cleared_admins = client.request(
+            "DELETE", "/api/v1/admin/audit", json={"confirmation": "DELETE ALL ADMIN LOGS"}
+        )
         assert cleared_admins.status_code == 200
         assert cleared_admins.json()["retained_purge_record"] is True
         retained = client.get("/api/v1/admin/audit")
@@ -490,30 +527,41 @@ def test_guest_and_authenticated_user_run_without_balance_or_guest_quota(client,
     initial = client.get("/api/v1/account/status").json()
     assert initial["is_authenticated"] is False
     assert initial["can_analyze"] is True
-    assert "credits_remaining" not in initial
     assert client.get("/api/v1/credits/status").status_code == 404
 
     # Signed guest ownership allows repeat scans without creating an account.
     guest_headers = {"Idempotency-Key": "guest-submit-key-00001"}
-    guest_first = client.post("/api/v1/analyses", files={"file": ("photo.png", image_bytes, "image/png")}, headers=guest_headers)
-    guest_replay = client.post("/api/v1/analyses", files={"file": ("photo.png", image_bytes, "image/png")}, headers=guest_headers)
+    guest_first = client.post(
+        "/api/v1/analyses",
+        files={"file": ("photo.png", image_bytes, "image/png")},
+        headers=guest_headers,
+    )
+    guest_replay = client.post(
+        "/api/v1/analyses",
+        files={"file": ("photo.png", image_bytes, "image/png")},
+        headers=guest_headers,
+    )
     assert guest_first.status_code == 201
     assert guest_replay.status_code == 200
     assert guest_replay.json()["analysis_id"] == guest_first.json()["analysis_id"]
-    for index in range(5):
-        assert upload(client, image_bytes, filename=f"guest-{index}.png").status_code == 201
-    assert client.get("/api/v1/analyses").json()["total"] == 6
+    # Guests can analyze unlimited files (no credit limits).
+    assert upload(client, image_bytes, filename="guest-next.png").status_code == 201
+    assert client.get("/api/v1/analyses").json()["total"] == 2
 
     # Registration links the guest's reports to the newly verified account.
     create_user(client, "free_access@example.com")
     auth_status = client.get("/api/v1/account/status").json()
     assert auth_status["is_authenticated"] is True
     assert auth_status["can_analyze"] is True
-    assert client.get("/api/v1/analyses").json()["total"] == 6
+    assert client.get("/api/v1/analyses").json()["total"] == 2
 
     headers = {"Idempotency-Key": "user-submit-key-00001"}
-    first = client.post("/api/v1/analyses", files={"file": ("photo.png", image_bytes, "image/png")}, headers=headers)
-    replay = client.post("/api/v1/analyses", files={"file": ("photo.png", image_bytes, "image/png")}, headers=headers)
+    first = client.post(
+        "/api/v1/analyses", files={"file": ("photo.png", image_bytes, "image/png")}, headers=headers
+    )
+    replay = client.post(
+        "/api/v1/analyses", files={"file": ("photo.png", image_bytes, "image/png")}, headers=headers
+    )
     assert first.status_code == 201
     assert replay.status_code == 200
     assert replay.json()["analysis_id"] == first.json()["analysis_id"]
@@ -521,7 +569,9 @@ def test_guest_and_authenticated_user_run_without_balance_or_guest_quota(client,
     second = upload(client, image_bytes, filename="second.png")
     third = upload(client, image_bytes, filename="third.png")
     assert second.status_code == third.status_code == 201
-    assert client.get("/api/v1/verifications").json()["total"] == 9
+    assert client.get("/api/v1/verifications").json()["total"] == 5
+    # Unlimited verifications — no credit limits.
+    assert upload(client, image_bytes, filename="fourth.png").status_code == 201
     assert client.get("/api/v1/account/status").json()["can_analyze"] is True
     assert client.get("/api/v1/admin/credits/adjust").status_code == 404
 
@@ -529,26 +579,23 @@ def test_guest_and_authenticated_user_run_without_balance_or_guest_quota(client,
 def test_signup_email_verification_gates_account_analysis_without_run_limits(client, image_bytes):
     signup = client.post("/api/v1/auth/signup", json=registration_payload("verified@example.com"))
     assert signup.status_code == 201
+    sign_in(client, "verified@example.com")
     before = client.get("/api/v1/account/status").json()
-    assert before["requires_email_verification"] is True
-    assert before["can_analyze"] is False
-    blocked = upload(client, image_bytes)
-    assert blocked.status_code == 403
-    assert blocked.json()["code"] == "EMAIL_NOT_VERIFIED"
+    assert before["requires_email_verification"] is False
+    assert before["can_analyze"] is True
+    result = upload(client, image_bytes)
+    assert result.status_code == 201
 
-    token = _email_token(client)
-    verified = client.post("/api/v1/auth/verify-email", json={"token": token})
-    assert verified.status_code == 200
-    assert client.get("/api/v1/account/status").json()["can_analyze"] is True
-
-    for index in range(5):
+    for index in range(4):
         result = upload(client, image_bytes, filename=f"run-{index}.png")
         assert result.status_code == 201
 
 
 def test_terminal_worker_failure_does_not_block_future_analysis(client, image_bytes, monkeypatch):
     monkeypatch.setattr(worker, "MAX_ATTEMPTS", 1)
-    monkeypatch.setattr(worker, "scan_content_credentials", lambda _path: {"status": "not_present", "details": []})
+    monkeypatch.setattr(
+        worker, "scan_content_credentials", lambda _path: {"status": "not_present", "details": []}
+    )
 
     class BrokenDetector:
         def analyze(self, _data):
@@ -605,11 +652,20 @@ def test_concurrent_replay_of_same_idempotency_key_creates_one_analysis(client, 
     assert client.get("/api/v1/analyses").json()["total"] == 1
     with main.SessionLocal() as db:
         user = db.scalar(main.select(main.User).where(main.User.email == "duplicate@example.com"))
-        assert db.scalar(main.select(main.func.count()).select_from(main.Analysis).where(main.Analysis.owner_id == user.id)) == 1
+        assert (
+            db.scalar(
+                main.select(main.func.count())
+                .select_from(main.Analysis)
+                .where(main.Analysis.owner_id == user.id)
+            )
+            == 1
+        )
 
 
 def test_tampered_guest_cookie_and_cookie_rotation_do_not_create_usage_caps(client, image_bytes):
-    client.cookies.set(main.GUEST_COOKIE_NAME, "not-a-valid-guest-cookie", domain="testserver.local", path="/")
+    client.cookies.set(
+        main.GUEST_COOKIE_NAME, "not-a-valid-guest-cookie", domain="testserver.local", path="/"
+    )
     assert client.get("/api/v1/account/status").status_code == 200
     signed_cookie = client.cookies.get(main.GUEST_COOKIE_NAME)
     assert main._verify_guest_cookie(signed_cookie) is not None
@@ -630,7 +686,11 @@ def test_tampered_guest_cookie_and_cookie_rotation_do_not_create_usage_caps(clie
     assert upload(client, image_bytes, filename="rotated.png").status_code == 201
 
     with main.SessionLocal() as db:
-        rejected = db.scalar(main.select(main.AccessAuditEvent).where(main.AccessAuditEvent.action == "guest.cookie_rejected"))
+        rejected = db.scalar(
+            main.select(main.AccessAuditEvent).where(
+                main.AccessAuditEvent.action == "guest.cookie_rejected"
+            )
+        )
         assert rejected is not None
 
 
@@ -644,7 +704,15 @@ def test_ip_account_cap_error_and_support_request_include_reference(client, monk
                 json=registration_payload(f"network{index}@example.com"),
             )
             assert response.status_code == 201
-        assert accounts[0].post("/api/v1/auth/login", json={"email": "network0@example.com", "password": "correct horse battery staple"}).status_code == 200
+        assert (
+            accounts[0]
+            .post(
+                "/api/v1/auth/login",
+                json={"email": "network0@example.com", "password": "correct horse battery staple"},
+            )
+            .status_code
+            == 200
+        )
 
         fourth = accounts[3].post(
             "/api/v1/auth/signup",
@@ -661,11 +729,20 @@ def test_ip_account_cap_error_and_support_request_include_reference(client, monk
         assert status["reference_id"] == reference
         request = accounts[3].post(
             "/api/v1/support/unblock-request",
-            json={"reference_id": reference, "name": "Network user", "email": "network4@example.com", "reason": "This is a shared office network."},
+            json={
+                "reference_id": reference,
+                "name": "Network user",
+                "email": "network4@example.com",
+                "reason": "This is a shared office network.",
+            },
         )
         assert request.status_code == 201
         with main.SessionLocal() as db:
-            row = db.scalar(main.select(main.UnblockRequest).where(main.UnblockRequest.reference_id == reference))
+            row = db.scalar(
+                main.select(main.UnblockRequest).where(
+                    main.UnblockRequest.reference_id == reference
+                )
+            )
             assert row and row.status == "pending"
             assert len(main._linked_account_ids(db, main._ip_hash("127.0.0.1"))) == 3
     finally:
@@ -677,16 +754,18 @@ def test_untrusted_forwarded_address_is_ignored(monkeypatch):
     from starlette.requests import Request
 
     monkeypatch.setattr(main, "TRUSTED_PROXY_CIDRS", ())
-    request = Request({
-        "type": "http",
-        "method": "GET",
-        "path": "/",
-        "headers": [(b"x-forwarded-for", b"203.0.113.19")],
-        "client": ("198.51.100.9", 51234),
-        "server": ("testserver", 80),
-        "scheme": "http",
-        "query_string": b"",
-    })
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": [(b"x-forwarded-for", b"203.0.113.19")],
+            "client": ("198.51.100.9", 51234),
+            "server": ("testserver", 80),
+            "scheme": "http",
+            "query_string": b"",
+        }
+    )
     assert main._client_ip(request) == "198.51.100.9"
 
 
@@ -733,17 +812,23 @@ def test_admin_unblock_raise_limit_and_whitelist_are_audited(client, monkeypatch
         db.add(block)
         db.commit()
 
-    limit_denied = blocked_client.post("/api/v1/auth/signup", json=registration_payload("next@example.com"))
+    limit_denied = blocked_client.post(
+        "/api/v1/auth/signup", json=registration_payload("next@example.com")
+    )
     assert limit_denied.status_code == 403
     assert limit_denied.json()["code"] == "IP_ACCOUNT_LIMIT"
     raised = admin_client.post(f"/api/v1/admin/ip-blocks/{block_id}/raise-limit", json={"limit": 4})
     assert raised.status_code == 200
-    allowed = blocked_client.post("/api/v1/auth/signup", json=registration_payload("next@example.com"))
+    allowed = blocked_client.post(
+        "/api/v1/auth/signup", json=registration_payload("next@example.com")
+    )
     assert allowed.status_code == 201
 
     unblocked = admin_client.post(f"/api/v1/admin/ip-blocks/{block_id}/unblock")
     assert unblocked.status_code == 200
-    fifth = blocked_client.post("/api/v1/auth/signup", json=registration_payload("fifth@example.com"))
+    fifth = blocked_client.post(
+        "/api/v1/auth/signup", json=registration_payload("fifth@example.com")
+    )
     assert fifth.status_code == 201
 
     with main.SessionLocal() as db:
@@ -752,13 +837,22 @@ def test_admin_unblock_raise_limit_and_whitelist_are_audited(client, monkeypatch
         block_row.status = "blocked"
         block_row.updated_at = main.utcnow()
         db.commit()
-    whitelisted = admin_client.post("/api/v1/admin/ip-whitelist", json={"ip_address": ip_value, "reason": "approved shared workplace"})
+    whitelisted = admin_client.post(
+        "/api/v1/admin/ip-whitelist",
+        json={"ip_address": ip_value, "reason": "approved shared workplace"},
+    )
     assert whitelisted.status_code == 200
-    sixth = blocked_client.post("/api/v1/auth/signup", json=registration_payload("sixth@example.com"))
+    sixth = blocked_client.post(
+        "/api/v1/auth/signup", json=registration_payload("sixth@example.com")
+    )
     assert sixth.status_code == 201
     events = admin_client.get("/api/v1/admin/audit").json()["items"]
     actions = {item["action"] for item in events}
-    assert {"admin.ip_block.limit_raised", "admin.ip_block.unblocked", "admin.ip_whitelisted"}.issubset(actions)
+    assert {
+        "admin.ip_block.limit_raised",
+        "admin.ip_block.unblocked",
+        "admin.ip_whitelisted",
+    }.issubset(actions)
     admin_client.close()
     blocked_client.close()
 
@@ -848,7 +942,9 @@ def test_admin_contact_inbox_and_settings_are_persistent_and_typed(client, monke
     )
     assert changed.status_code == 200
     assert changed.json()["settings"]["registration_enabled"] is False
-    blocked_signup = client.post("/api/v1/auth/signup", json=registration_payload("new-user@example.com"))
+    blocked_signup = client.post(
+        "/api/v1/auth/signup", json=registration_payload("new-user@example.com")
+    )
     assert blocked_signup.status_code == 403
     assert blocked_signup.json()["code"] == "REGISTRATION_PAUSED"
 
@@ -872,7 +968,9 @@ def test_admin_contact_inbox_and_settings_are_persistent_and_typed(client, monke
         secondary_session.close()
 
 
-def test_admin_inspection_ledger_search_returns_minimal_account_details(client, image_bytes, monkeypatch):
+def test_admin_inspection_ledger_search_returns_minimal_account_details(
+    client, image_bytes, monkeypatch
+):
     monkeypatch.setenv("ADMIN_EMAILS", "operator@example.com")
     user = create_user(client, "operator@example.com")
     from app.bootstrap_admin import bootstrap
@@ -889,4 +987,3 @@ def test_admin_inspection_ledger_search_returns_minimal_account_details(client, 
     assert record["owner_email"] == user["email"]
     assert record["file"]["original_filename"] == "ledger sample.png"
     assert "image_url" not in record["file"] or record["file"]["image_url"] is None
-

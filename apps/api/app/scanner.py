@@ -75,7 +75,11 @@ def scan_content_credentials(path: Path) -> dict[str, object]:
     if isinstance(manifest, dict):
         active = manifest.get("active_manifest")
         manifests = manifest.get("manifests")
-        active_data = manifests.get(active, {}) if isinstance(manifests, dict) and isinstance(active, str) else {}
+        active_data = (
+            manifests.get(active, {})
+            if isinstance(manifests, dict) and isinstance(active, str)
+            else {}
+        )
         assertions = active_data.get("assertions", []) if isinstance(active_data, dict) else []
         if isinstance(assertions, list):
             for assertion in assertions:
@@ -95,10 +99,20 @@ def scan_content_credentials(path: Path) -> dict[str, object]:
                                     source_types.add(source_type)
 
     details = {
-        "trusted": "The manifest validated and its signer chains to the configured C2PA trust list.",
-        "valid_untrusted": "The manifest passed integrity validation, but its signer is not established as trusted.",
-        "invalid": "The manifest failed C2PA validation; inspect the validation evidence before drawing conclusions.",
-        "unverified": "A manifest was present, but the SDK did not return a recognized validation state.",
+        "trusted": (
+            "The manifest validated and its signer chains to the configured C2PA trust list."
+        ),
+        "valid_untrusted": (
+            "The manifest passed integrity validation, but its signer is not "
+            "established as trusted."
+        ),
+        "invalid": (
+            "The manifest failed C2PA validation; inspect the validation evidence "
+            "before drawing conclusions."
+        ),
+        "unverified": (
+            "A manifest was present, but the SDK did not return a recognized validation state."
+        ),
     }
 
     return {

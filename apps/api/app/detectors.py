@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import io
-import json
 import logging
 import math
 import os
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Literal, Protocol
+from typing import Literal, Protocol
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +105,12 @@ class UnconfiguredSyntheticDetector:
         return SyntheticDetection(status="not_configured", limitations=(self.reason,))
 
     def healthcheck(self) -> dict[str, object]:
-        return {"status": "not_configured", "model_id": None, "model_version": None, "details": self.reason}
+        return {
+            "status": "not_configured",
+            "model_id": None,
+            "model_version": None,
+            "details": self.reason,
+        }
 
 
 class OnnxSyntheticImageDetector:
@@ -115,10 +119,22 @@ class OnnxSyntheticImageDetector:
     name = MODEL_ID
     model_version = MODEL_VERSION
     limitations = (
-        "Whole-image AI-generation screening only; inspects frequency-domain drift and neural artifact residuals.",
-        "The score is calibrated on a class-balanced development set, not a population prevalence guarantee.",
-        "Performance falls on extreme multi-hop compression, tiny synthetic composites, screenshots, and unseen generators.",
-        "The published evaluation reports development/calibration results; its locked competition test was not opened.",
+        (
+            "Whole-image AI-generation screening only; inspects frequency-domain drift and "
+            "neural artifact residuals."
+        ),
+        (
+            "The score is calibrated on a class-balanced development set, not a population "
+            "prevalence guarantee."
+        ),
+        (
+            "Performance falls on extreme multi-hop compression, tiny synthetic composites, "
+            "screenshots, and unseen generators."
+        ),
+        (
+            "The published evaluation reports development/calibration results; its locked "
+            "competition test was not opened."
+        ),
     )
 
     def __init__(self, model_path: Path):
@@ -147,7 +163,9 @@ class OnnxSyntheticImageDetector:
         options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
         options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
         options.enable_cpu_mem_arena = True
-        self._session = ort.InferenceSession(str(self.model_path), sess_options=options, providers=["CPUExecutionProvider"])
+        self._session = ort.InferenceSession(
+            str(self.model_path), sess_options=options, providers=["CPUExecutionProvider"]
+        )
         inputs = self._session.get_inputs()
         if len(inputs) != 1:
             self._session = None
@@ -157,13 +175,31 @@ class OnnxSyntheticImageDetector:
 
     def healthcheck(self) -> dict[str, object]:
         if not self.model_path.is_file():
-            return {"status": "not_configured", "model_id": self.name, "model_version": self.model_version, "details": "Model weights are missing; start the launcher while connected to download them."}
+            return {
+                "status": "not_configured",
+                "model_id": self.name,
+                "model_version": self.model_version,
+                "details": (
+                    "Model weights are missing; start the launcher while connected "
+                    "to download them."
+                ),
+            }
         try:
             self._load()
         except Exception as exc:
             logger.warning("Detector health check failed: %s", type(exc).__name__)
-            return {"status": "unavailable", "model_id": self.name, "model_version": self.model_version, "details": "The local model could not be loaded or verified."}
-        return {"status": "ready", "model_id": self.name, "model_version": self.model_version, "details": "Verified local ONNX model; CPU inference enabled."}
+            return {
+                "status": "unavailable",
+                "model_id": self.name,
+                "model_version": self.model_version,
+                "details": "The local model could not be loaded or verified.",
+            }
+        return {
+            "status": "ready",
+            "model_id": self.name,
+            "model_version": self.model_version,
+            "details": "Verified local ONNX model; CPU inference enabled.",
+        }
 
     @staticmethod
     def _input_tensor(image_bytes: bytes):
@@ -183,7 +219,9 @@ class OnnxSyntheticImageDetector:
         pixels = np.asarray(image, dtype=np.float32) / 255.0
         mean = np.asarray((0.485, 0.456, 0.406), dtype=np.float32)
         std = np.asarray((0.229, 0.224, 0.225), dtype=np.float32)
-        return np.transpose((pixels - mean) / std, (2, 0, 1))[None, ...].astype(np.float32, copy=False)
+        return np.transpose((pixels - mean) / std, (2, 0, 1))[None, ...].astype(
+            np.float32, copy=False
+        )
 
     def analyze(self, image_bytes: bytes) -> SyntheticDetection:
         started = time.perf_counter()
@@ -194,8 +232,14 @@ class OnnxSyntheticImageDetector:
             if not output or getattr(output[0], "size", 0) != 1:
                 raise ValueError("The model returned an unexpected output signature.")
             raw_logit = float(output[0].reshape(-1)[0])
-            calibrated_score = 1.0 / (1.0 + math.exp(-max(-80.0, min(80.0, CALIBRATION_A * raw_logit + CALIBRATION_B))))
-            label = "ai_generated_signal" if calibrated_score >= MODEL_THRESHOLD else "no_strong_ai_signal"
+            calibrated_score = 1.0 / (
+                1.0 + math.exp(-max(-80.0, min(80.0, CALIBRATION_A * raw_logit + CALIBRATION_B)))
+            )
+            label = (
+                "ai_generated_signal"
+                if calibrated_score >= MODEL_THRESHOLD
+                else "no_strong_ai_signal"
+            )
             spectral = compute_spectral_drift(image_bytes)
             return SyntheticDetection(
                 status="completed",
@@ -204,7 +248,9 @@ class OnnxSyntheticImageDetector:
                 model_version=self.model_version,
                 label=label,
                 score=round(calibrated_score, 6),
-                score_semantics="Calibrated screening score on a 0–1 scale; not a population probability.",
+                score_semantics=(
+                    "Calibrated screening score on a 0–1 scale; not a population probability."
+                ),
                 threshold=MODEL_THRESHOLD,
                 threshold_policy_version="community-forensics-low-quality-2026-08-threshold-0.65",
                 latency_ms=round((time.perf_counter() - started) * 1000),
@@ -219,17 +265,24 @@ class OnnxSyntheticImageDetector:
                 model_id=self.name,
                 model_version=self.model_version,
                 latency_ms=round((time.perf_counter() - started) * 1000),
-                limitations=("The local model could not complete inference; no prediction was produced.",),
+                limitations=(
+                    "The local model could not complete inference; no prediction was produced.",
+                ),
             )
 
 
 class ApiSyntheticImageDetector:
-    """REST API deepfake detector adapter. Calls external model API endpoints with graceful fallback."""
+    "REST API deepfake detector adapter. Calls external model API endpoints with graceful fallback."
 
     name = "external_deepfake_api"
     model_version = "api-v1"
 
-    def __init__(self, api_url: str, api_key: str | None = None, fallback_detector: SyntheticImageDetector | None = None):
+    def __init__(
+        self,
+        api_url: str,
+        api_key: str | None = None,
+        fallback_detector: SyntheticImageDetector | None = None,
+    ):
         self.api_url = api_url
         self.api_key = api_key
         self.fallback = fallback_detector
@@ -271,7 +324,9 @@ class ApiSyntheticImageDetector:
                         spectral_forensics=compute_spectral_drift(image_bytes),
                     )
         except Exception as exc:
-            logger.warning("External deepfake API call failed (%s); falling back to local detector", exc)
+            logger.warning(
+                "External deepfake API call failed (%s); falling back to local detector", exc
+            )
 
         if self.fallback:
             return self.fallback.analyze(image_bytes)
@@ -298,23 +353,39 @@ class TestOnlyDetector:
             model_version=self.model_version,
             label="no_strong_ai_signal",
             score=0.31,
-            score_semantics="Deterministic automated-test fixture; never a production detector result.",
+            score_semantics=(
+                "Deterministic automated-test fixture; never a production detector result."
+            ),
             limitations=("Automated-test fixture only; not valid for real image analysis.",),
-            spectral_forensics={"high_freq_power_db": 12.4, "low_freq_power_db": 34.2, "spectral_drift_ratio": 0.362, "frequency_dispersion": 8.1},
+            spectral_forensics={
+                "high_freq_power_db": 12.4,
+                "low_freq_power_db": 34.2,
+                "spectral_drift_ratio": 0.362,
+                "frequency_dispersion": 8.1,
+            },
         )
 
     def healthcheck(self) -> dict[str, object]:
-        return {"status": "test_only", "model_id": "test-only-fixture", "model_version": self.model_version, "details": "E2E-only deterministic fixture."}
+        return {
+            "status": "test_only",
+            "model_id": "test-only-fixture",
+            "model_version": self.model_version,
+            "details": "E2E-only deterministic fixture.",
+        }
 
 
 def create_detector(provider: str, model_path: Path, app_env: str) -> SyntheticImageDetector:
     local_onnx = OnnxSyntheticImageDetector(model_path)
     if provider == "disabled":
-        return UnconfiguredSyntheticDetector("Synthetic-image screening is disabled by configuration.")
+        return UnconfiguredSyntheticDetector(
+            "Synthetic-image screening is disabled by configuration."
+        )
     if provider == "local":
         return local_onnx
     if provider in {"api", "external"}:
-        api_url = os.getenv("AI_DETECTOR_API_URL", "https://api.deepfake-detector.internal/v1/detect")
+        api_url = os.getenv(
+            "AI_DETECTOR_API_URL", "https://api.deepfake-detector.internal/v1/detect"
+        )
         api_key = os.getenv("AI_DETECTOR_API_KEY", "")
         return ApiSyntheticImageDetector(api_url, api_key, fallback_detector=local_onnx)
     if provider == "test" and app_env in {"test", "e2e"}:

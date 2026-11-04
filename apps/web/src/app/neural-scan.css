@@ -1,0 +1,394 @@
+/* ==========================================================================
+   NEURAL SCAN & INSPECTION ANIMATION OVERLAY
+   Forensic Cybernetic Neural Grid, Laser Sweep & Real-Time Tensors HUD
+   ========================================================================== */
+
+.neural-scan-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 280px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.88);
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(163, 230, 53, 0.25);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  user-select: none;
+}
+
+/* Base canvas that draws neural nodes and synapses */
+.neural-scan-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Sweeping cybernetic laser beam */
+.neural-scan-laser {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(163, 230, 53, 0.4) 15%, 
+    #a3e635 50%, 
+    rgba(163, 230, 53, 0.4) 85%, 
+    transparent 100%
+  );
+  box-shadow: 
+    0 0 12px #a3e635, 
+    0 0 24px rgba(163, 230, 53, 0.7),
+    0 0 48px rgba(163, 230, 53, 0.4);
+  z-index: 4;
+  pointer-events: none;
+  animation: neural-laser-sweep 3.2s ease-in-out infinite alternate;
+}
+
+.neural-scan-laser::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -80px;
+  height: 80px;
+  background: linear-gradient(to top, rgba(163, 230, 53, 0.18), transparent);
+  pointer-events: none;
+}
+
+@keyframes neural-laser-sweep {
+  0% {
+    top: 2%;
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    top: 96%;
+    opacity: 0.85;
+  }
+}
+
+/* 4-corner forensic targeting brackets */
+.neural-hud-corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-color: #a3e635;
+  border-style: solid;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 4px rgba(163, 230, 53, 0.6));
+}
+
+.neural-hud-corner.top-left {
+  top: 12px;
+  left: 12px;
+  border-width: 2px 0 0 2px;
+}
+
+.neural-hud-corner.top-right {
+  top: 12px;
+  right: 12px;
+  border-width: 2px 2px 0 0;
+}
+
+.neural-hud-corner.bottom-left {
+  bottom: 12px;
+  left: 12px;
+  border-width: 0 0 2px 2px;
+}
+
+.neural-hud-corner.bottom-right {
+  bottom: 12px;
+  right: 12px;
+  border-width: 0 2px 2px 0;
+}
+
+/* Top Telemetry Header */
+.neural-hud-header {
+  position: absolute;
+  top: 12px;
+  left: 40px;
+  right: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 5;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a3e635;
+  text-shadow: 0 0 6px rgba(163, 230, 53, 0.4);
+  pointer-events: none;
+}
+
+.neural-hud-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(163, 230, 53, 0.14);
+  border: 1px solid rgba(163, 230, 53, 0.45);
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  color: #bef264;
+  font-weight: 700;
+}
+
+.neural-pulse-dot-lime {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a3e635;
+  box-shadow: 0 0 8px #a3e635;
+  animation: neural-pulse 1.2s infinite ease-in-out;
+}
+
+@keyframes neural-pulse {
+  0%, 100% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+    box-shadow: 0 0 12px #a3e635, 0 0 20px rgba(163, 230, 53, 0.8);
+  }
+}
+
+/* Center HUD targeting reticle */
+.neural-center-reticle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90px;
+  height: 90px;
+  border: 1px dashed rgba(163, 230, 53, 0.5);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 3;
+  animation: neural-reticle-spin 14s linear infinite;
+}
+
+.neural-center-reticle::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  border: 1px solid #a3e635;
+  border-radius: 50%;
+}
+
+.neural-center-reticle::after {
+  content: "+";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #a3e635;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+@keyframes neural-reticle-spin {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+/* Bottom Telemetry HUD */
+.neural-hud-footer {
+  position: absolute;
+  bottom: 12px;
+  left: 40px;
+  right: 40px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  z-index: 5;
+  font-size: 0.7rem;
+  color: rgba(226, 232, 240, 0.85);
+  pointer-events: none;
+}
+
+.neural-telemetry-stage {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(163, 230, 53, 0.3);
+  backdrop-filter: blur(4px);
+  padding: 0.35rem 0.65rem;
+  border-radius: 4px;
+  max-width: 70%;
+}
+
+.neural-stage-label {
+  color: #a3e635;
+  font-weight: 700;
+  margin-right: 0.4rem;
+}
+
+.neural-specs-ticker {
+  text-align: right;
+  line-height: 1.4;
+  color: #94a3b8;
+}
+
+.neural-specs-ticker strong {
+  color: #f1f5f9;
+}
+
+/* Audio spectrum wave bars */
+.neural-audio-spectrum {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 70px;
+  z-index: 3;
+}
+
+.neural-spectrum-bar {
+  width: 5px;
+  height: 20px;
+  background: linear-gradient(to top, rgba(163, 230, 53, 0.2), #a3e635);
+  border-radius: 2px;
+  box-shadow: 0 0 6px rgba(163, 230, 53, 0.5);
+  animation: neural-bar-bounce 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes neural-bar-bounce {
+  0% {
+    height: 12px;
+    opacity: 0.5;
+  }
+  50% {
+    height: 64px;
+    opacity: 1;
+  }
+  100% {
+    height: 24px;
+    opacity: 0.7;
+  }
+}
+
+/* Toggle Overlay Button */
+.neural-overlay-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid rgba(163, 230, 53, 0.4);
+  background: rgba(163, 230, 53, 0.1);
+  color: #4d7c0f;
+  transition: all 0.15s ease;
+}
+
+.neural-overlay-toggle:hover {
+  background: rgba(163, 230, 53, 0.2);
+  border-color: #84cc16;
+}
+
+.neural-overlay-toggle.is-active {
+  background: #a3e635;
+  color: #0f172a;
+  border-color: #84cc16;
+  box-shadow: 0 0 10px rgba(163, 230, 53, 0.4);
+}
+
+/* Type verification card in UploadForm */
+.type-verification-badge {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin: 0.85rem 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  transition: all 0.2s ease;
+}
+
+.type-verification-badge.is-verified {
+  background: rgba(163, 230, 53, 0.12);
+  border: 1px solid rgba(163, 230, 53, 0.4);
+  color: #1e293b;
+}
+
+.type-verification-badge.is-failed {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #991b1b;
+}
+
+.type-verification-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.82rem;
+  flex-shrink: 0;
+}
+
+.type-verification-badge.is-verified .type-verification-icon {
+  background: #a3e635;
+  color: #0f172a;
+  box-shadow: 0 0 8px rgba(163, 230, 53, 0.6);
+}
+
+.type-verification-badge.is-failed .type-verification-icon {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.type-verification-details {
+  flex: 1;
+}
+
+.type-verification-title {
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.2rem;
+}
+
+.type-verification-meta {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.type-pipeline-pill {
+  display: inline-block;
+  background: rgba(15, 23, 42, 0.06);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #334155;
+}
+

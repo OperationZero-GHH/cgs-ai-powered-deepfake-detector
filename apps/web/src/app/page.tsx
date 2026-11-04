@@ -48,50 +48,185 @@ export default function HomePage() {
           </div>
           <div className="home-hero__bottom container"><span>JPEG · PNG · WEBP</span><span>BOUNDED DECODING</span><span>PRIVATE REPORT HISTORY</span><span>HUMAN REVIEW</span></div>
         </section>
-        <section className="public-section home-review-flow" aria-labelledby="review-flow-title">
+
+        {/* Redesigned: Start with what can be checked */}
+        <section className="public-section home-review-flow-v2" aria-labelledby="review-flow-title">
           <div className="container">
-            <header className="section-header">
-              <span className="eyebrow">A careful review, step by step</span>
+            <header className="section-header-v2">
+              <span className="eyebrow-pill">
+                <span className="eyebrow-dot" aria-hidden="true" />
+                MULTI-LAYER FORENSIC PIPELINE
+              </span>
               <h2 id="review-flow-title">Start with what can be checked.</h2>
+              <p className="section-subtitle">
+                A structured, four-phase inspection architecture that validates mathematical file structure,
+                verifies provenance credentials, analyzes frequency-domain drift, and runs multi-model neural inference.
+              </p>
             </header>
-            <div className="workflow-rail">
-              <article className="workflow-stage">
-                <span className="workflow-number">01</span>
-                <div className="workflow-stage__card">
-                  <h3>Verify the file</h3>
-                  <p>Check the image format, decoding boundaries, and integrity hash before interpreting its contents.</p>
+
+            <div className="pipeline-grid">
+              <article className="pipeline-card">
+                <div className="pipeline-card__header">
+                  <span className="pipeline-badge">PHASE 01</span>
+                  <span className="pipeline-type">STRUCTURAL AUDIT</span>
+                </div>
+                <h3>Cryptographic File Integrity</h3>
+                <p>
+                  Computes an immutable SHA-256 digest, enforces strict byte-allocation boundaries,
+                  and inspects decoded image structures without relying on unverified headers.
+                </p>
+                <div className="pipeline-tags">
+                  <span>SHA-256 Digest</span>
+                  <span>Bounded Decoding</span>
+                  <span>Format Sanity</span>
                 </div>
               </article>
-              <article className="workflow-stage">
-                <span className="workflow-number">02</span>
-                <div className="workflow-stage__card">
-                  <h3>Read its context</h3>
-                  <p>Review available metadata and provenance clues alongside the image, not as a verdict on their own.</p>
+
+              <article className="pipeline-card">
+                <div className="pipeline-card__header">
+                  <span className="pipeline-badge">PHASE 02</span>
+                  <span className="pipeline-type">PROVENANCE MANIFEST</span>
+                </div>
+                <h3>C2PA & Origin Provenance</h3>
+                <p>
+                  Disassembles embedded JUMBF metadata containers to verify hardware cryptographic signing keys,
+                  camera attestation certificates, and editing histories.
+                </p>
+                <div className="pipeline-tags">
+                  <span>C2PA v2.1 Manifest</span>
+                  <span>Hardware Keys</span>
+                  <span>Edit History</span>
                 </div>
               </article>
-              <article className="workflow-stage">
-                <span className="workflow-number">03</span>
-                <div className="workflow-stage__card">
-                  <h3>Keep signals bounded</h3>
-                  <p>See what automated checks can and cannot say, then leave consequential judgment to a person.</p>
+
+              <article className="pipeline-card">
+                <div className="pipeline-card__header">
+                  <span className="pipeline-badge">PHASE 03</span>
+                  <span className="pipeline-type">NEURAL ENSEMBLE</span>
+                </div>
+                <h3>Multi-Model Neural Screening</h3>
+                <p>
+                  Evaluates parallel Vision Transformers (ViT) and Wav2Vec2 models alongside
+                  2D Fast Fourier Transform (FFT) spectral frequency drift analytics.
+                </p>
+                <div className="pipeline-tags">
+                  <span>Dual ViT Ensembles</span>
+                  <span>Wav2Vec2 Audio</span>
+                  <span>2D-FFT Spectral Drift</span>
+                </div>
+              </article>
+
+              <article className="pipeline-card">
+                <div className="pipeline-card__header">
+                  <span className="pipeline-badge">PHASE 04</span>
+                  <span className="pipeline-type">CALIBRATED SYNTHESIS</span>
+                </div>
+                <h3>Calibrated Bounds & Disclosures</h3>
+                <p>
+                  Combines model outputs into calibrated probability distributions with agreement metrics,
+                  conservatively defaulting to inconclusive whenever detectors diverge.
+                </p>
+                <div className="pipeline-tags">
+                  <span>Bayesian Ensemble</span>
+                  <span>Agreement Std-Dev</span>
+                  <span>Visible Limits</span>
                 </div>
               </article>
             </div>
-            <Link className="home-section-link" href="/how-it-works">See how review works <span aria-hidden="true">→</span></Link>
+
+            <div className="pipeline-footer-cta">
+              <Link className="button button-primary btn-lime-themed" href="/sign-up">
+                Start an inspection <span className="arrow" aria-hidden="true">→</span>
+              </Link>
+              <Link className="home-section-link-v2" href="/how-it-works">
+                Explore technical methodology <span aria-hidden="true">→</span>
+              </Link>
+            </div>
           </div>
         </section>
-        <section className="public-section public-section--muted home-evidence-limits" aria-labelledby="evidence-limits-title">
-          <div className="container home-evidence-limits__inner">
-            <div className="section-header">
-              <span className="eyebrow">Evidence, not a verdict</span>
+
+        {/* Redesigned: A report describes signals. It doesn’t decide authenticity. */}
+        <section className="public-section home-evidence-limits-v2" aria-labelledby="evidence-limits-title">
+          <div className="container">
+            <header className="section-header-v2 text-center">
+              <span className="eyebrow-pill">
+                <span className="eyebrow-dot" aria-hidden="true" />
+                TRANSPARENCY & METHODOLOGY PRINCIPLES
+              </span>
               <h2 id="evidence-limits-title">A report describes signals. It doesn’t decide authenticity.</h2>
-              <p>Every result stays attached to what was observed, what was available, and what still needs human context.</p>
+              <p className="section-subtitle centered">
+                Deepfake detection is not a binary switch. We provide reproducible empirical measurements with explicit boundaries,
+                leaving consequential judgment to qualified human reviewers.
+              </p>
+            </header>
+
+            <div className="evidence-matrix">
+              {/* Left Column: What We Measure */}
+              <div className="matrix-pane matrix-pane--verified">
+                <div className="matrix-pane__head">
+                  <span className="matrix-icon verified">✓</span>
+                  <div>
+                    <h3>What We Measure</h3>
+                    <small>Empirical, reproducible forensic observations</small>
+                  </div>
+                </div>
+                <div className="matrix-list">
+                  <div className="matrix-item">
+                    <strong>Cryptographic Envelope Fingerprint</strong>
+                    <p>Exact SHA-256 payload digest matching against previous audits and tampering flags.</p>
+                  </div>
+                  <div className="matrix-item">
+                    <strong>Frequency-Domain Fourier Drift</strong>
+                    <p>Spectral power distribution variances produced by generative diffusion lattices and GAN upsamplers.</p>
+                  </div>
+                  <div className="matrix-item">
+                    <strong>Multi-Model Ensemble Agreement</strong>
+                    <p>Independent inference scores from distinct architectures with agreement variance metrics.</p>
+                  </div>
+                  <div className="matrix-item">
+                    <strong>Hardware-Backed Origin Attestation</strong>
+                    <p>Validated cryptographic certificate chains adhering strictly to C2PA provenance standards.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: What We Reject */}
+              <div className="matrix-pane matrix-pane--boundaries">
+                <div className="matrix-pane__head">
+                  <span className="matrix-icon boundaries">✕</span>
+                  <div>
+                    <h3>What We Reject</h3>
+                    <small>Guarantees against overclaiming and false finality</small>
+                  </div>
+                </div>
+                <div className="matrix-list">
+                  <div className="matrix-item">
+                    <strong>Zero Categorical "100% Real" Claims</strong>
+                    <p>Absence of synthetic artifacts is never proof of reality. Real-world context is always required.</p>
+                  </div>
+                  <div className="matrix-item">
+                    <strong>No Proprietary Black-Box Scoring</strong>
+                    <p>Every individual model score, latency, and boundary condition is transparently reported.</p>
+                  </div>
+                  <div className="matrix-item">
+                    <strong>No Silent Weight or API Drifts</strong>
+                    <p>All neural models run locally and offline, strictly pinned to cryptographically locked commit hashes.</p>
+                  </div>
+                  <div className="matrix-item">
+                    <strong>No Automated Human Replacements</strong>
+                    <p>Our findings empower investigators; they never replace investigative expertise or legal deliberation.</p>
+                  </div>
+                </div>
+              </div>
             </div>
-            <dl className="home-evidence-ledger">
-              <div><dt>Verified</dt><dd>File integrity and supported image structure</dd></div>
-              <div><dt>Observed</dt><dd>Metadata and provenance information present in the file</dd></div>
-              <div><dt>Qualified</dt><dd>Automated signals, with method availability and limits made visible</dd></div>
-            </dl>
+
+            <div className="matrix-callout">
+              <div className="matrix-callout__pill">CORE COMMITMENT</div>
+              <p>
+                <strong>Inconclusive is a valid, responsible result:</strong> When detectors diverge, media is heavily compressed,
+                or signals are ambiguous, CGS DeepFake Shield explicitly reports an inconclusive verdict rather than a misleading guess.
+              </p>
+            </div>
           </div>
         </section>
       </main>

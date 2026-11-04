@@ -1,0 +1,9 @@
+apps/api/
+models/
+data/
+scripts/
+docs/
+*.py
+__pycache__/
+.venv/
+test-storage/

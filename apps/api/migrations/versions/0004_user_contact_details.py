@@ -1,8 +1,7 @@
 """Add unique usernames and optional phone details to users."""
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "0004_user_contact_details"
 down_revision = "0003_postgres_rls"

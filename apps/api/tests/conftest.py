@@ -1,7 +1,11 @@
 import os
+import tempfile
 import uuid
 from pathlib import Path
-import tempfile
+
+import pytest
+from fastapi.testclient import TestClient
+
 _pytest_run_id = uuid.uuid4().hex
 os.environ["APP_ENV"] = "test"
 os.environ["AI_DETECTOR_PROVIDER"] = "disabled"
@@ -11,10 +15,8 @@ os.environ["DATABASE_URL"] = f"sqlite:///{(_pytest_tmp / 'test.db').as_posix()}"
 os.environ["STORAGE_DIR"] = str(_pytest_tmp / "storage")
 os.environ["SESSION_COOKIE_SECURE"] = "false"
 
-import pytest
-from fastapi.testclient import TestClient
-
-from app import main
+# The test environment must be set before the app reads its configuration.
+from app import main  # noqa: E402
 
 
 @pytest.fixture
@@ -28,7 +30,11 @@ def client(monkeypatch):
         if item.is_file():
             item.unlink()
     outbox = []
-    monkeypatch.setattr(main, "_send_account_email", lambda address, subject, body: outbox.append((address, subject, body)))
+    monkeypatch.setattr(
+        main,
+        "_send_account_email",
+        lambda address, subject, body: outbox.append((address, subject, body)),
+    )
     with TestClient(main.app) as test_client:
         test_client.account_email_outbox = outbox
         yield test_client
@@ -37,6 +43,7 @@ def client(monkeypatch):
 @pytest.fixture
 def image_bytes():
     from io import BytesIO
+
     from PIL import Image
 
     output = BytesIO()

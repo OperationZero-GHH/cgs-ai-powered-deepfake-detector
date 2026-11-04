@@ -4,6 +4,7 @@ import "./globals.css";
 import "./theme.css";
 import "./auth.css";
 import "./account-access.css";
+import "./neural-scan.css";
 import { CookieBanner } from "@/components/cookie-banner";
 import { MotionProvider } from "@/components/motion-provider";
 import { AccountAccessProvider } from "@/components/account-access-context";
@@ -47,7 +48,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" data-theme="dark" className={poppins.variable} suppressHydrationWarning>
+    <html lang="en" data-theme="light" className={poppins.variable} suppressHydrationWarning>
       <body>
         <AccountAccessProvider>
           <MotionProvider>{children}</MotionProvider>

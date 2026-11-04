@@ -14,12 +14,12 @@ const toc = [
 ];
 
 const glanceItems = [
-  "Stored privately: original image or video + normalized preview",
-  "Not sent to third-party inference providers by this MVP",
-  "No required analytics calls; system fonts only",
-  "Delete an analysis or account from Settings",
-  "Reports stay until deletion or an enabled retention policy",
-  "No image contents or full EXIF in local API logs",
+  "Zero training: Uploaded media is never used to train or fine-tune AI models",
+  "Airgapped inference: Executed on offline local workers without third-party API leaks",
+  "Strict isolation: Ephemeral vault storage scoped to authenticated accounts or signed guests",
+  "User-directed deletion: Purge evidence anytime from report view or account settings",
+  "No invasive tracking: Salted SHA-256 IP digests; no device fingerprinting",
+  "Unlimited access: All users can perform unlimited verifications without restrictions",
 ];
 
 export default function PrivacyPage() {
@@ -78,13 +78,12 @@ export default function PrivacyPage() {
 
         <section id="why-stored">
           <span className="section-kicker">§ 02</span>
-          <h2>Why it is stored</h2>
+          <h2>Why it is stored and our zero-training commitment</h2>
           <p>
-            Media bytes are retained to show your report preview and to support the analysis workflow. The local analysis
-            worker uses the media on the server. By this MVP, media bytes are not sent to a third-party inference provider.
-            The result is a fallible screening signal, not proof of origin, and this model does not locate edited regions
-            or identify face swaps. The worker also reads C2PA Content Credentials when available; a missing C2PA manifest
-            does not establish that an image is authentic.
+            Media bytes are retained solely to display your forensic evidence report and support the analysis workflow.
+            Under no circumstances is uploaded user media used to train, retrain, fine-tune, or benchmark AI models.
+            All model inference runs on isolated local workers with networking disabled (airgapped runtime); your data
+            is never shared with external API providers or public model repositories.
           </p>
         </section>
 

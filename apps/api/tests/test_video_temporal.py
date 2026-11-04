@@ -7,12 +7,14 @@ import numpy as np
 import pytest
 from PIL import Image
 
+from app.detectors import TestOnlyDetector
 from app.temporal_detector import HF_CHECKPOINT, TEMPORAL_CACHE_DIR, create_temporal_detector
 from app.video import analyze_video, extract_temporal_frames, is_video_suffix, validate_video
-from app.detectors import TestOnlyDetector
 
 
-def _create_synthetic_mp4_bytes(num_frames: int = 15, width: int = 64, height: int = 64, fps: float = 10.0) -> bytes:
+def _create_synthetic_mp4_bytes(
+    num_frames: int = 15, width: int = 64, height: int = 64, fps: float = 10.0
+) -> bytes:
     """Create a temporary valid MP4 video in memory."""
     with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
         tmp_path = Path(tmp.name)
@@ -110,7 +112,9 @@ def test_dual_layer_video_analysis():
 
         temporal_detector = TrainedTemporalFixture()
 
-        result = analyze_video(tmp_path, detector=spatial_detector, temporal_detector=temporal_detector, max_frames=6)
+        result = analyze_video(
+            tmp_path, detector=spatial_detector, temporal_detector=temporal_detector, max_frames=6
+        )
         assert result["status"] == "completed"
         assert result["media_type"] == "video"
         assert result["provider"] == "dual_layer_ensemble"

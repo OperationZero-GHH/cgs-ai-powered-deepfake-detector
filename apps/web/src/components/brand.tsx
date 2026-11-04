@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import { AnimatePresence, motion } from "motion/react";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 export function Mark({ small = false }: { small?: boolean }) {
   return (
@@ -221,7 +220,6 @@ export function Header() {
           <Link className="button button-primary btn-lime-themed" href="/sign-up">
             Get started <span className="arrow" aria-hidden="true">→</span>
           </Link>
-          <ThemeToggle />
         </div>
         <button
           className={`mobile-menu-toggle${mobileMenuOpen ? " is-open" : ""}`}
@@ -329,7 +327,6 @@ export function Header() {
                 <Link className="button button-primary btn-lime-themed" href="/sign-up" onClick={() => setMobileMenuOpen(false)}>
                   Get started <span aria-hidden="true">→</span>
                 </Link>
-                <div className="mobile-theme-switch"><span>Appearance</span><ThemeToggle /></div>
               </div>
             </motion.aside>
           </motion.div>
@@ -387,56 +384,100 @@ export function Header() {
 
 export function Footer() {
   return (
-    <footer className="site-footer">
+    <footer className="site-footer-modern" role="contentinfo">
       <div className="container">
-        <div className="footer-grid">
-          <div className="footer-brand-column">
-            <div className="footer-brand">
-              <Brand light />
-            </div>
-            <p className="footer-copy">Image evidence for careful review. Clear methods, visible limits, human judgment.</p>
+        {/* Top Status & Integrity Bar */}
+        <div className="footer-status-bar">
+          <div className="footer-status-left">
+            <span className="footer-pulse-dot" aria-hidden="true" />
+            <span className="footer-status-text">
+              <strong>All Forensic Ensembles Active</strong> · Offline Local Inference · Pinned SHA-256 Checkpoints
+            </span>
           </div>
-
-          <div>
-            <p className="section-kicker">Product</p>
-            <div className="footer-links">
-              <Link href="/solutions">Solutions</Link>
-              <Link href="/technology">Technology</Link>
-
-              <Link href="/how-it-works">How it works</Link>
-            </div>
-          </div>
-
-          <div>
-            <p className="section-kicker">Company</p>
-            <div className="footer-links">
-              <Link href="/about">About us</Link>
-              <Link href="/contact">Contact</Link>
-              <Link href="/solutions#testimonials">Testimonials</Link>
-            </div>
-          </div>
-
-          <div>
-            <p className="section-kicker">Resources</p>
-            <div className="footer-links">
-              <Link href="/how-it-works">Method and limits</Link>
-              <Link href="/sign-up">Create an account</Link>
-              <Link href="/sign-in">Sign in</Link>
-            </div>
-          </div>
-
-          <div>
-            <p className="section-kicker">Legal</p>
-            <div className="footer-links">
-              <Link href="/privacy">Privacy</Link>
-              <Link href="/terms">Terms</Link>
-            </div>
+          <div className="footer-status-tags">
+            <span className="status-pill">ViT Dual Ensembles</span>
+            <span className="status-pill">Wav2Vec2 Audio</span>
+            <span className="status-pill">C2PA Manifest Engine</span>
+            <span className="status-pill">2D-FFT Spectral Drift</span>
           </div>
         </div>
 
-        <div className="footer-bottom">
-          <small>© {new Date().getFullYear()} CGS DeepFake Shield. Evidence for review, never a verdict.</small>
-          <a href="#main-content">Back to top</a>
+        {/* Main 5-Column Navigation Grid */}
+        <div className="footer-main-grid">
+          <div className="footer-brand-pane">
+            <div className="footer-brand-wrap">
+              <Brand light />
+            </div>
+            <p className="footer-brand-mission">
+              Empowering organizations, newsrooms, and legal researchers with cryptographic provenance,
+              frequency-domain drift analytics, and multi-model neural inspection. Evidence for human review, never automated finality.
+            </p>
+            <div className="footer-guarantees">
+              <span className="guarantee-chip">◈ Zero Absolute Claims</span>
+              <span className="guarantee-chip">◈ Offline Cryptographic Security</span>
+              <span className="guarantee-chip">◈ Open Verification Metrics</span>
+            </div>
+          </div>
+
+          <div className="footer-col">
+            <p className="footer-col-title">Forensic Engine</p>
+            <ul className="footer-nav-list">
+              <li><Link href="/app/analyze">DeepFake Image Screen</Link></li>
+              <li><Link href="/app/analyze">Audio Voice Analysis</Link></li>
+              <li><Link href="/app/analyze">Video Frame Sampling</Link></li>
+              <li><Link href="/technology">Spectral FFT Residuals</Link></li>
+              <li><Link href="/how-it-works">C2PA Metadata Chain</Link></li>
+            </ul>
+          </div>
+
+          <div className="footer-col">
+            <p className="footer-col-title">Use Cases</p>
+            <ul className="footer-nav-list">
+              <li><Link href="/solutions">Enterprise & Platform Overview</Link></li>
+              <li><Link href="/solutions#media">Newsrooms & Media Houses</Link></li>
+              <li><Link href="/solutions#legal">Legal & Forensic Evidence</Link></li>
+              <li><Link href="/solutions#identity">KYC & Identity Verification</Link></li>
+              <li><Link href="/solutions#testimonials">Field Testimonials & Reviews</Link></li>
+            </ul>
+          </div>
+
+          <div className="footer-col">
+            <p className="footer-col-title">Methodology</p>
+            <ul className="footer-nav-list">
+              <li><Link href="/technology">Multi-Model Architecture</Link></li>
+              <li><Link href="/how-it-works">Model Calibration & Bounds</Link></li>
+              <li><Link href="/how-it-works">Probabilistic Scoring</Link></li>
+              <li><Link href="/about">About CGS Shield Team</Link></li>
+              <li><Link href="/contact">Report Discrepancy / Bug</Link></li>
+            </ul>
+          </div>
+
+          <div className="footer-col">
+            <p className="footer-col-title">Access & Legal</p>
+            <ul className="footer-nav-list">
+              <li><Link href="/login">Account Sign In</Link></li>
+              <li><Link href="/sign-up">Register New Account</Link></li>
+              <li><Link href="/privacy">Privacy & Data Retention</Link></li>
+              <li><Link href="/terms">Terms of Service</Link></li>
+              <li><Link href="/contact">Enterprise Contact Desk</Link></li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Bottom Bar with Integrity Notice & Copyright */}
+        <div className="footer-bottom-bar">
+          <div className="footer-legal-copy">
+            <p className="footer-disclaimer">
+              <strong>Integrity Notice:</strong> Forensic outputs represent probabilistic indicators calibrated against controlled benchmarks.
+              Outputs must be interpreted within verifiable context and do not constitute legal certainty.
+            </p>
+            <small>© {new Date().getFullYear()} CGS DeepFake Shield. All rights reserved. Designed for truth and accountability.</small>
+          </div>
+          <div className="footer-actions">
+            <a href="#main-content" className="footer-back-to-top" aria-label="Back to top">
+              Back to top ↑
+            </a>
+          </div>
         </div>
       </div>
     </footer>

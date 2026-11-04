@@ -41,17 +41,18 @@ export default function TermsPage() {
       >
         <section id="service-scope">
           <span className="section-kicker">§ 01</span>
-          <h2>Service scope</h2>
+          <h2>Service scope and probabilistic screening</h2>
           <p>
-            CGS DeepFake Shield provides image file integrity and metadata observations. The current MVP does not provide
-            an AI-generated image verdict, face recognition, legal certification, or a guarantee that an image or depicted
-            event is authentic.
+            CGS DeepFake Shield provides multi-model neural screening and media forensic indicators for images, videos,
+            and audio recordings. The service produces probabilistic screening scores and evidentiary observations.
+            It does not provide legal certifications, absolute authenticity guarantees, or definitive conclusions on depicted events.
           </p>
           <ul className="checklist">
-            <li>AI-generated image verdict: not provided</li>
-            <li>Face recognition: not provided</li>
-            <li>Legal certification: not provided</li>
-            <li>Authenticity guarantee: not provided</li>
+            <li>Multi-model deepfake screening: probabilistic indicators provided</li>
+            <li>Audio speech anti-spoofing: acoustic anomaly analysis provided</li>
+            <li>Cryptographic provenance: C2PA manifest verification where present</li>
+            <li>Absolute authenticity guarantee: impossible; never claimed</li>
+            <li>Legal certification: not provided; requires human expert witness testimony</li>
           </ul>
         </section>
 

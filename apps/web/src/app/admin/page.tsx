@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { AuthGuard } from "@/components/auth-guard";
 import AdminContent from "./admin-content";
 
-const apiOrigin = process.env.NEXT_API_ORIGIN ?? "http://127.0.0.1:8000";
+// Use the Vercel Services binding (runtime-injected), falling back to
+// NEXT_API_ORIGIN for local dev, then localhost.
+const apiOrigin = process.env.API_SERVICE_URL ?? process.env.NEXT_API_ORIGIN ?? "http://127.0.0.1:8000";
 
 function adminLoginPath() {
   const configuredSlug = process.env.ADMIN_LOGIN_SLUG?.trim() ?? "";

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { Brand } from "@/components/brand";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { api } from "@/lib/api";
 
 export function AdminInviteForm() {
@@ -64,7 +63,6 @@ export function AdminInviteForm() {
         <Brand light />
         <div className="auth-top-actions">
           <Link className="button button-secondary auth-back" href="/admin/login">Administrator sign in</Link>
-          <ThemeToggle />
         </div>
       </header>
       <main className="auth-main" aria-labelledby="admin-invite-title">

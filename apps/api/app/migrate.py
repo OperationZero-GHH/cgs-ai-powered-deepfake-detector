@@ -18,15 +18,32 @@ BASELINE_COLUMNS = {
     "users": {"id", "email", "display_name", "password_hash", "role", "active", "created_at"},
     "sessions": {"token_hash", "user_id", "expires_at", "revoked_at"},
     "analyses": {
-        "id", "owner_id", "status", "original_filename", "object_key", "preview_key",
-        "detected_mime_type", "size_bytes", "width", "height", "sha256", "metadata_json",
-        "detector_result_json", "created_at", "completed_at",
+        "id",
+        "owner_id",
+        "status",
+        "original_filename",
+        "object_key",
+        "preview_key",
+        "detected_mime_type",
+        "size_bytes",
+        "width",
+        "height",
+        "sha256",
+        "metadata_json",
+        "detector_result_json",
+        "created_at",
+        "completed_at",
     },
 }
 LATEST_TABLES = {"inference_jobs", "rate_limit_buckets", "audit_events", "worker_heartbeats"}
 AUTH_TABLES = {
-    "guest_sessions", "ip_account_links", "ip_enforcement_guards", "ip_blocks",
-    "ip_whitelist", "unblock_requests", "access_audit_events",
+    "guest_sessions",
+    "ip_account_links",
+    "ip_enforcement_guards",
+    "ip_blocks",
+    "ip_whitelist",
+    "unblock_requests",
+    "access_audit_events",
 }
 
 
@@ -38,7 +55,10 @@ def _alembic_config(database_url: str) -> Config:
 
 
 def _adopt_existing_schema(config: Config, database_url: str) -> None:
-    engine = create_engine(database_url, connect_args={"check_same_thread": False} if database_url.startswith("sqlite:") else {})
+    engine = create_engine(
+        database_url,
+        connect_args={"check_same_thread": False} if database_url.startswith("sqlite:") else {},
+    )
     try:
         inspector = inspect(engine)
         tables = set(inspector.get_table_names())
@@ -51,12 +71,20 @@ def _adopt_existing_schema(config: Config, database_url: str) -> None:
         if not existing_core:
             return
         if existing_core != set(BASELINE_COLUMNS):
-            raise RuntimeError("Found a partial application schema without migration history; refusing to guess a migration state.")
+            raise RuntimeError(
+                "Found a partial application schema without migration history; refusing to "
+                "guess a migration state."
+            )
         for table, required in BASELINE_COLUMNS.items():
             actual = {column["name"] for column in inspector.get_columns(table)}
             if not required.issubset(actual):
-                raise RuntimeError(f"The existing {table} table does not match a supported schema; refusing to modify it automatically.")
-        if LATEST_TABLES.issubset(tables) and "provenance_json" in {c["name"] for c in inspector.get_columns("analyses")}:
+                raise RuntimeError(
+                    f"The existing {table} table does not match a supported schema; refusing to "
+                    "modify it automatically."
+                )
+        if LATEST_TABLES.issubset(tables) and "provenance_json" in {
+            c["name"] for c in inspector.get_columns("analyses")
+        }:
             user_cols = {c["name"] for c in inspector.get_columns("users")}
             existing_auth_tables = AUTH_TABLES.intersection(tables)
             if existing_auth_tables and existing_auth_tables != AUTH_TABLES:

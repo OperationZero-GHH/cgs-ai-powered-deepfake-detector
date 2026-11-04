@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import io
 import logging
-import os
 import tempfile
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
-from PIL import Image, ImageOps
+from PIL import Image
 
 logger = logging.getLogger("cgs.video")
 
@@ -53,15 +52,24 @@ def is_video_data(data: bytes) -> bool:
     return False
 
 
-def validate_video(data: bytes, filename: str, max_bytes: int, max_duration_seconds: int = MAX_VIDEO_DURATION_SECONDS) -> tuple[str, int, int, dict[str, Any], bytes]:
+def validate_video(
+    data: bytes,
+    filename: str,
+    max_bytes: int,
+    max_duration_seconds: int = MAX_VIDEO_DURATION_SECONDS,
+) -> tuple[str, int, int, dict[str, Any], bytes]:
     suffix = Path(filename).suffix.lower()
     expected_format = VIDEO_EXTENSIONS.get(suffix)
     if not expected_format or not is_video_data(data):
-        raise HTTPException(status_code=415, detail="Upload a supported MP4, WebM, MOV, or AVI video.")
+        raise HTTPException(
+            status_code=415, detail="Upload a supported MP4, WebM, MOV, or AVI video."
+        )
 
     if len(data) > max_bytes:
         limit_mb = max_bytes // (1024 * 1024)
-        raise HTTPException(status_code=413, detail=f"The video file exceeds the {limit_mb} MB limit.")
+        raise HTTPException(
+            status_code=413, detail=f"The video file exceeds the {limit_mb} MB limit."
+        )
 
     import cv2
 
@@ -86,11 +94,19 @@ def validate_video(data: bytes, filename: str, max_bytes: int, max_duration_seco
             raise HTTPException(status_code=415, detail="Invalid video frame dimensions.")
 
         if width > MAX_VIDEO_DIMENSION or height > MAX_VIDEO_DIMENSION:
-            raise HTTPException(status_code=413, detail=f"Video dimensions exceed {MAX_VIDEO_DIMENSION}px limit.")
+            raise HTTPException(
+                status_code=413, detail=f"Video dimensions exceed {MAX_VIDEO_DIMENSION}px limit."
+            )
 
         duration_seconds = frame_count / fps if frame_count > 0 else 0.0
         if duration_seconds > max_duration_seconds:
-            raise HTTPException(status_code=413, detail=f"Video duration ({duration_seconds:.1f}s) exceeds the {max_duration_seconds}-second limit.")
+            raise HTTPException(
+                status_code=413,
+                detail=(
+                    f"Video duration ({duration_seconds:.1f}s) exceeds the "
+                    f"{max_duration_seconds}-second limit."
+                ),
+            )
 
         # Extract midpoint frame for poster preview
         midpoint_index = max(0, frame_count // 2) if frame_count > 0 else 0
@@ -102,7 +118,9 @@ def validate_video(data: bytes, filename: str, max_bytes: int, max_duration_seco
             ret, frame_bgr = cap.read()
 
         if not ret or frame_bgr is None:
-            raise HTTPException(status_code=415, detail="Failed to extract preview keyframe from video.")
+            raise HTTPException(
+                status_code=415, detail="Failed to extract preview keyframe from video."
+            )
 
         # Convert BGR to RGB PIL image
         rgb_frame = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
@@ -122,6 +140,12 @@ def validate_video(data: bytes, filename: str, max_bytes: int, max_duration_seco
             "frame_count": frame_count,
             "fps": round(fps, 2),
             "sampled_frames_target": 6,
+            "type_verification": {
+                "verified": True,
+                "format": expected_format,
+                "magic_signature": data[:8].hex().upper(),
+                "status": "verified",
+            },
             "preview_note": "A normalized keyframe preview was extracted for report display.",
         }
 
@@ -221,7 +245,10 @@ def analyze_video(
                 "status": "unavailable" if frame_det.status == "not_configured" else "failed",
                 "media_type": "video",
                 "limitations": (
-                    "The image model could not produce a valid score for every sampled video frame; no video verdict was produced.",
+                    (
+                        "The image model could not produce a valid score for every sampled "
+                        "video frame; no video verdict was produced."
+                    ),
                 ),
             }
         frame_score = float(frame_det.score)
@@ -230,17 +257,25 @@ def analyze_video(
             return {
                 "status": "failed",
                 "media_type": "video",
-                "limitations": ("The image model returned an invalid frame score; no video verdict was produced.",),
+                "limitations": (
+                    (
+                        "The image model returned an invalid frame score; no video verdict was "
+                        "produced."
+                    ),
+                ),
             }
         if temporal_detector is not None:
             collected_frame_buffers.append(jpeg_bytes)
         layer1_scores.append(frame_score)
-        frame_results.append({
-            "frame_index": idx,
-            "timestamp_seconds": timestamp_s,
-            "layer1_score": round(frame_score, 4),
-            "label": frame_det.label or ("ai_generated_signal" if frame_score >= 0.65 else "no_strong_ai_signal"),
-        })
+        frame_results.append(
+            {
+                "frame_index": idx,
+                "timestamp_seconds": timestamp_s,
+                "layer1_score": round(frame_score, 4),
+                "label": frame_det.label
+                or ("ai_generated_signal" if frame_score >= 0.65 else "no_strong_ai_signal"),
+            }
+        )
 
         # Free frame buffer if not needed for Layer 2
         if temporal_detector is None:
@@ -266,13 +301,22 @@ def analyze_video(
             temporal_result = temporal_detector.analyze_frame_sequence(collected_frame_buffers)
             if temporal_result.get("status") == "completed":
                 candidate_score = temporal_result.get("score")
-                if isinstance(candidate_score, (int, float)) and np.isfinite(candidate_score) and 0.0 <= candidate_score <= 1.0:
+                if (
+                    isinstance(candidate_score, (int, float))
+                    and np.isfinite(candidate_score)
+                    and 0.0 <= candidate_score <= 1.0
+                ):
                     l2_score = float(candidate_score)
                 else:
                     temporal_result = {
                         "status": "failed",
                         "layer": "temporal",
-                        "limitations": ("The temporal model returned an invalid score; it was excluded from the ensemble.",),
+                        "limitations": (
+                            (
+                                "The temporal model returned an invalid score; it was excluded "
+                                "from the ensemble."
+                            ),
+                        ),
                     }
         except Exception as exc:
             logger.warning("Layer 2 temporal analysis failed: %s", type(exc).__name__)
@@ -330,7 +374,10 @@ def analyze_video(
         },
         "frame_timeline": frame_results,
         "limitations": [
-            "A completed Layer 2 score is included only when the trained temporal checkpoint is loaded and inference succeeds.",
+            (
+                "A completed Layer 2 score is included only when the trained temporal "
+                "checkpoint is loaded and inference succeeds."
+            ),
             "Layer 1 detects per-frame frequency drift, GAN artifacts, and upsampling signatures.",
             "The dual-layer screening index has not been calibrated as a probability.",
             "Heavy re-encoding, low frame rates, and fast motion blur may reduce confidence.",

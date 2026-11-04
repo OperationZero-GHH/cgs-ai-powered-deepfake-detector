@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, type User } from "@/lib/api";
 import { Brand } from "@/components/brand";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { Tooltip } from "@/components/tooltip";
 
 const navItems = [
@@ -395,7 +394,6 @@ export function AuthGuard({ children, admin = false }: { children: React.ReactNo
             <span className="privacy-chip">
               <i aria-hidden="true" /> Encrypted Workspace
             </span>
-            <ThemeToggle />
           </div>
         </header>
 

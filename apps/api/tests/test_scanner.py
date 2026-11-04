@@ -60,7 +60,9 @@ def test_trusted_manifest_is_reported_without_hardware_or_text_corruption(tmp_pa
                         "label": "c2pa.actions",
                         "data": {
                             "actions": [
-                                {"digitalSourceType": "http://cv.iptc.org/digitalsourcetype/digitalCapture"}
+                                {
+                                    "digitalSourceType": "http://cv.iptc.org/digitalsourcetype/digitalCapture"
+                                }
                             ]
                         },
                     }
@@ -93,7 +95,9 @@ def test_scanner_tolerates_malformed_active_manifest_reference(tmp_path, monkeyp
             pass
 
         def json(self):
-            return json.dumps({"validation_state": "trusted", "active_manifest": [], "manifests": {}})
+            return json.dumps(
+                {"validation_state": "trusted", "active_manifest": [], "manifests": {}}
+            )
 
     monkeypatch.setitem(sys.modules, "c2pa", SimpleNamespace(Reader=FakeReader))
     result = scan_content_credentials(tmp_path / "malformed.png")

@@ -7,7 +7,10 @@ from app.detectors import MODEL_FILE, OnnxSyntheticImageDetector
 
 
 def test_checked_in_image_model_loads_and_runs_real_onnx_inference():
-    model_path = Path(__file__).resolve().parents[1] / "models" / MODEL_FILE
+    repo_root = Path(__file__).resolve().parents[3]
+    model_path = repo_root / "models" / MODEL_FILE
+    if not model_path.exists():
+        model_path = Path(__file__).resolve().parents[1] / "models" / MODEL_FILE
     detector = OnnxSyntheticImageDetector(model_path)
     image = Image.new("RGB", (640, 480), color=(92, 135, 184))
     buffer = BytesIO()

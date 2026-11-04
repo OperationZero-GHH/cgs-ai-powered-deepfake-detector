@@ -11,7 +11,13 @@ from sqlalchemy import select
 from app import main, migrate
 
 
-def bootstrap(email: str, password: str, display_name: str | None = None) -> None:
+def bootstrap(
+    email: str,
+    password: str,
+    display_name: str | None = None,
+    username: str | None = None,
+    phone_number: str | None = None,
+) -> None:
     normalized = main._normalized_email(email)
     if normalized not in main._admin_emails():
         raise SystemExit("That email address is not listed in ADMIN_EMAILS.")
@@ -29,6 +35,8 @@ def bootstrap(email: str, password: str, display_name: str | None = None) -> Non
                 email_identity=main._email_identity(normalized),
                 email_verified_at=main.utcnow(),
                 display_name=cleaned_name,
+                username=username,
+                phone_number=phone_number,
                 password_hash=main.PASSWORDS.hash(password),
                 role="admin",
             )
@@ -40,29 +48,49 @@ def bootstrap(email: str, password: str, display_name: str | None = None) -> Non
             user.password_hash = main.PASSWORDS.hash(password)
             if display_name:
                 user.display_name = cleaned_name
+            if username:
+                user.username = username
+            if phone_number:
+                user.phone_number = phone_number
         db.flush()
         main._set_rls_principal(db, "admin", user.id)
-        db.add(main.AuditEvent(actor_id=user.id, action="admin.bootstrap.completed", subject_id=user.id))
+        db.add(
+            main.AuditEvent(
+                actor_id=user.id, action="admin.bootstrap.completed", subject_id=user.id
+            )
+        )
         db.commit()
     print(f"Administrator account is ready for {normalized}.")
 
 
 def cli() -> None:
-    parser = argparse.ArgumentParser(description="Create an allowlisted CGS DeepFake Shield administrator.")
+    parser = argparse.ArgumentParser(
+        description="Create an allowlisted CGS DeepFake Shield administrator."
+    )
     parser.add_argument("email", help="An address present in ADMIN_EMAILS")
     parser.add_argument("--name", help="Display name for a new account")
+    parser.add_argument("--username", help="Username for the administrator")
+    parser.add_argument("--phone", help="Phone number for the administrator")
     args = parser.parse_args()
 
     if main.APP_ENV == "e2e":
         password = os.getenv("E2E_ADMIN_PASSWORD", "")
         if not password:
-            raise SystemExit("E2E_ADMIN_PASSWORD is required for the isolated browser-test administrator.")
+            raise SystemExit(
+                "E2E_ADMIN_PASSWORD is required for the isolated browser-test administrator."
+            )
     else:
         password = getpass.getpass("Administrator password (15–128 characters): ")
         confirmation = getpass.getpass("Confirm password: ")
         if password != confirmation:
             raise SystemExit("Passwords did not match.")
-    bootstrap(args.email, password, args.name)
+    bootstrap(
+        args.email,
+        password,
+        display_name=args.name,
+        username=args.username,
+        phone_number=args.phone,
+    )
 
 
 if __name__ == "__main__":

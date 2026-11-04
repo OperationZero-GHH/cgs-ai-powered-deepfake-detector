@@ -1,8 +1,7 @@
 """Persist contact inquiries and typed platform controls for administrators."""
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 revision = "0008_admin_console_management"
 down_revision = "0007_repair_adopted_schema"
@@ -31,23 +30,50 @@ def upgrade() -> None:
         "system_settings",
         sa.Column("key", sa.String(length=64), primary_key=True),
         sa.Column("value_json", sa.Text(), nullable=False),
-        sa.Column("updated_by", sa.String(length=36), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column(
+            "updated_by",
+            sa.String(length=36),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
 
     if op.get_bind().dialect.name == "postgresql":
         op.execute("ALTER TABLE contact_inquiries ENABLE ROW LEVEL SECURITY")
         op.execute("ALTER TABLE contact_inquiries FORCE ROW LEVEL SECURITY")
-        op.execute("CREATE POLICY contact_inquiries_public_submit ON contact_inquiries FOR INSERT WITH CHECK (true)")
-        op.execute("CREATE POLICY contact_inquiries_admin_read ON contact_inquiries FOR SELECT USING (current_setting('cgs.actor', true) = 'admin')")
-        op.execute("CREATE POLICY contact_inquiries_admin_update ON contact_inquiries FOR UPDATE USING (current_setting('cgs.actor', true) = 'admin') WITH CHECK (current_setting('cgs.actor', true) = 'admin')")
+        op.execute(
+            "CREATE POLICY contact_inquiries_public_submit ON contact_inquiries FOR INSERT "
+            "WITH CHECK (true)"
+        )
+        op.execute(
+            "CREATE POLICY contact_inquiries_admin_read ON contact_inquiries FOR SELECT "
+            "USING (current_setting('cgs.actor', true) = 'admin')"
+        )
+        op.execute(
+            "CREATE POLICY contact_inquiries_admin_update ON contact_inquiries FOR UPDATE "
+            "USING (current_setting('cgs.actor', true) = 'admin') WITH CHECK "
+            "(current_setting('cgs.actor', true) = 'admin')"
+        )
 
         op.execute("ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY")
         op.execute("ALTER TABLE system_settings FORCE ROW LEVEL SECURITY")
-        op.execute("CREATE POLICY system_settings_runtime_read ON system_settings FOR SELECT USING (true)")
-        op.execute("CREATE POLICY system_settings_admin_insert ON system_settings FOR INSERT WITH CHECK (current_setting('cgs.actor', true) = 'admin')")
-        op.execute("CREATE POLICY system_settings_admin_update ON system_settings FOR UPDATE USING (current_setting('cgs.actor', true) = 'admin') WITH CHECK (current_setting('cgs.actor', true) = 'admin')")
-        op.execute("CREATE POLICY system_settings_admin_delete ON system_settings FOR DELETE USING (current_setting('cgs.actor', true) = 'admin')")
+        op.execute(
+            "CREATE POLICY system_settings_runtime_read ON system_settings FOR SELECT USING (true)"
+        )
+        op.execute(
+            "CREATE POLICY system_settings_admin_insert ON system_settings FOR INSERT WITH "
+            "CHECK (current_setting('cgs.actor', true) = 'admin')"
+        )
+        op.execute(
+            "CREATE POLICY system_settings_admin_update ON system_settings FOR UPDATE USING "
+            "(current_setting('cgs.actor', true) = 'admin') WITH CHECK "
+            "(current_setting('cgs.actor', true) = 'admin')"
+        )
+        op.execute(
+            "CREATE POLICY system_settings_admin_delete ON system_settings FOR DELETE USING "
+            "(current_setting('cgs.actor', true) = 'admin')"
+        )
 
 
 def downgrade() -> None:

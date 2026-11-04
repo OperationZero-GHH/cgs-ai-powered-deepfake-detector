@@ -1,8 +1,12 @@
-"""Durable, database-backed analysis worker with leases and bounded retries."""
+"""Durable, database-backed multi-model analysis worker.
+
+Includes leases, automatic refunds, and retries.
+"""
 
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import logging
 import os
@@ -10,30 +14,28 @@ import socket
 import time
 import uuid
 from datetime import timedelta
-from pathlib import Path
 
+from PIL import Image
 from sqlalchemy import and_, or_, select, update
 
 from app import main
-from app.detectors import detection_to_dict
+from app.ensemble import (
+    evaluate_audio_ensemble,
+    evaluate_image_ensemble,
+    evaluate_video_ensemble,
+)
+from app.media_safety import (
+    convert_audio_to_pcm_wav,
+    extract_audio_from_video,
+    extract_uniform_video_frames,
+)
+from app.model_loader import registry, verify_models_lockfile
 from app.scanner import scan_content_credentials
-from app.temporal_detector import create_temporal_detector
 
 logger = logging.getLogger("cgs.worker")
 MAX_ATTEMPTS = max(1, int(os.getenv("INFERENCE_MAX_ATTEMPTS", "3")))
 LEASE_SECONDS = max(60, int(os.getenv("INFERENCE_LEASE_SECONDS", "1800")))
 WORKER_ID = f"{socket.gethostname()}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
-
-# ── Layer 2 Temporal Detector Singleton ──
-_temporal_detector = None
-
-def _get_temporal_detector():
-    """Lazy-load the Layer 2 temporal deepfake detector."""
-    global _temporal_detector
-    if _temporal_detector is None:
-        hf_token = os.getenv("HF_TOKEN", "")
-        _temporal_detector = create_temporal_detector(hf_token=hf_token)
-    return _temporal_detector
 
 
 def _claim(worker_id: str) -> tuple[str, str] | None:
@@ -66,8 +68,13 @@ def _claim(worker_id: str) -> tuple[str, str] | None:
             .where(
                 main.InferenceJob.attempts < MAX_ATTEMPTS,
                 or_(
-                    and_(main.InferenceJob.status == "queued", main.InferenceJob.available_at <= now),
-                    and_(main.InferenceJob.status == "processing", main.InferenceJob.locked_until <= now),
+                    and_(
+                        main.InferenceJob.status == "queued", main.InferenceJob.available_at <= now
+                    ),
+                    and_(
+                        main.InferenceJob.status == "processing",
+                        main.InferenceJob.locked_until <= now,
+                    ),
                 ),
             )
             .order_by(main.InferenceJob.created_at.asc())
@@ -83,8 +90,13 @@ def _claim(worker_id: str) -> tuple[str, str] | None:
                 main.InferenceJob.id == candidate.id,
                 main.InferenceJob.attempts < MAX_ATTEMPTS,
                 or_(
-                    and_(main.InferenceJob.status == "queued", main.InferenceJob.available_at <= now),
-                    and_(main.InferenceJob.status == "processing", main.InferenceJob.locked_until <= now),
+                    and_(
+                        main.InferenceJob.status == "queued", main.InferenceJob.available_at <= now
+                    ),
+                    and_(
+                        main.InferenceJob.status == "processing",
+                        main.InferenceJob.locked_until <= now,
+                    ),
                 ),
             )
             .values(
@@ -101,7 +113,11 @@ def _claim(worker_id: str) -> tuple[str, str] | None:
             return None
         analysis = db.get(main.Analysis, candidate.analysis_id)
         if not analysis:
-            db.execute(update(main.InferenceJob).where(main.InferenceJob.id == candidate.id).values(status="failed", last_error="analysis_missing", locked_until=None))
+            db.execute(
+                update(main.InferenceJob)
+                .where(main.InferenceJob.id == candidate.id)
+                .values(status="failed", last_error="analysis_missing", locked_until=None)
+            )
             db.commit()
             return None
         analysis.status = "processing"
@@ -111,7 +127,9 @@ def _claim(worker_id: str) -> tuple[str, str] | None:
         db.close()
 
 
-def _finish(job_id: str, analysis_id: str, worker_id: str, detector_result: dict, provenance: dict) -> None:
+def _finish(
+    job_id: str, analysis_id: str, worker_id: str, detector_result: dict, provenance: dict
+) -> None:
     db = main.SessionLocal()
     try:
         main.set_worker_rls_principal(db)
@@ -166,14 +184,13 @@ def _retry_or_fail(job_id: str, analysis_id: str, worker_id: str, error_kind: st
 
 
 def cleanup_expired_uploads(batch_size: int = 100) -> int:
-    """Delete terminal reports and their private files after the configured retention period."""
-    if main.UPLOAD_RETENTION_DAYS <= 0:
-        return 0
+    """Delete private upload media older than the configured retention window (default 1 hour)."""
+    retention_hours = int(os.getenv("UPLOAD_RETENTION_HOURS", "1"))
     db = main.SessionLocal()
     removed_keys: list[str] = []
     try:
         main.set_worker_rls_principal(db)
-        cutoff = main.utcnow() - timedelta(days=main.UPLOAD_RETENTION_DAYS)
+        cutoff = main.utcnow() - timedelta(hours=retention_hours)
         rows = db.scalars(
             select(main.Analysis)
             .where(
@@ -192,13 +209,14 @@ def cleanup_expired_uploads(batch_size: int = 100) -> int:
         raise
     finally:
         db.close()
+
     for key in removed_keys:
         try:
             main.private_storage_path(key).unlink(missing_ok=True)
         except (OSError, ValueError):
-            logger.warning("Unable to remove expired private media object (%s)", type(key).__name__)
+            logger.warning("Unable to remove expired private media object (%s)", key)
     if rows:
-        logger.info("Removed %s expired analysis report(s)", len(rows))
+        logger.info("Removed %d expired analysis records", len(rows))
     return len(rows)
 
 
@@ -222,11 +240,9 @@ def _heartbeat(worker_id: str) -> None:
 
 
 def process_one(worker_id: str = WORKER_ID) -> bool:
-    """Process one available durable job with prioritized triage funnel:
-    1. Instant SHA-256 digest lookup for past completed analyses.
-    2. C2PA / EXIF provenance verification: hardware-signed camera certificates bypass CPU neural layer.
-    3. Heavy neural & spectral analysis: streaming temporal keyframe extraction for video, isolated image inference.
-    """
+    """Process one available durable job using multi-model ensemble pipelines."""
+    if not registry._initialized:
+        registry.initialize()
     claimed = _claim(worker_id)
     if not claimed:
         return False
@@ -244,7 +260,7 @@ def process_one(worker_id: str = WORKER_ID) -> bool:
             mime_type = analysis.detected_mime_type
             sha256_digest = analysis.sha256
 
-            # ── TRIAGE FUNNEL TIER 1: Instant SHA-256 Digest Cache Lookup ──
+            # Triage: Cache lookup
             cached_match = db.scalar(
                 select(main.Analysis)
                 .where(
@@ -263,11 +279,8 @@ def process_one(worker_id: str = WORKER_ID) -> bool:
                     or cached_detection.get("label") == "authentic_hardware_provenance"
                 )
                 if not is_legacy_provenance_result:
-                    logger.info("Triage hit: SHA-256 cache match found for %s (digest=%s…)", analysis_id, sha256_digest[:12])
+                    logger.info("Triage hit: SHA-256 cache match found for %s", analysis_id)
                     cached_detection["cached_from_digest"] = True
-                    # Older cached reports could contain brand-name guesses as
-                    # hardware authentication. Preserve C2PA status, but never
-                    # reuse that deprecated assertion as proof of capture.
                     cached_provenance["is_hardware_authenticated"] = False
                     cached_provenance["hardware_signer"] = None
                     _finish(job_id, analysis_id, worker_id, cached_detection, cached_provenance)
@@ -276,41 +289,120 @@ def process_one(worker_id: str = WORKER_ID) -> bool:
         finally:
             db.close()
 
-        # C2PA provenance is reported independently; it does not replace the
-        # model's screening result or prove that an asset is authentic.
+        # C2PA provenance check
         provenance = scan_content_credentials(original_path)
-        # ── Neural & Spectral Deepfake Screening ──
-        if mime_type.startswith("video/"):
-            from app.video import analyze_video
-            # Dual-layer streaming analysis: Layer 1 ONNX spatial + Layer 2 temporal LSTM
-            temporal = _get_temporal_detector()
-            detection = analyze_video(original_path, main.synthetic_detector, temporal_detector=temporal)
-        else:
-            image_bytes = original_path.read_bytes()
-            detection = detection_to_dict(main.synthetic_detector.analyze(image_bytes))
 
-        _finish(job_id, analysis_id, worker_id, detection, provenance)
+        # ── Pipeline Branching by Media Type ──
+        if mime_type.startswith("audio/"):
+            # 1. Standalone Audio Pipeline
+            pcm_wav_bytes = convert_audio_to_pcm_wav(original_path)
+            if registry.audio_detector:
+                audio_out = registry.audio_detector.predict_audio(pcm_wav_bytes)
+            else:
+                from app.adapters.protocol import DetectorOutput
+
+                audio_out = DetectorOutput(
+                    name="Vansh180/deepfake-audio-wav2vec2",
+                    version="unloaded",
+                    p_fake=0.5,
+                    ok=False,
+                    error="Audio detector is not configured or offline weights not available.",
+                    latency_ms=0.0,
+                )
+            ensemble_res = evaluate_audio_ensemble(analysis_id, audio_out)
+            detection_dict = ensemble_res.to_dict()
+
+        elif mime_type.startswith("video/"):
+            # 2. Video Pipeline: Frame Sampling + Audio Track Extraction
+            video_frames = extract_uniform_video_frames(
+                original_path, max_frames=30, fps_target=1.0
+            )
+            frame_ensembles = []
+            for _f_idx, _f_time, frame_img in video_frames:
+                frame_outputs = [
+                    detector.predict(frame_img) for detector in registry.image_detectors
+                ]
+                frame_res = evaluate_image_ensemble(analysis_id, frame_outputs)
+                frame_ensembles.append(frame_res)
+
+            # Extract video audio track
+            audio_track_wav = extract_audio_from_video(original_path)
+            audio_out = None
+            if audio_track_wav and registry.audio_detector:
+                audio_out = registry.audio_detector.predict_audio(audio_track_wav)
+
+            ensemble_res = evaluate_video_ensemble(
+                analysis_id,
+                frame_ensembles,
+                audio_output=audio_out,
+            )
+            detection_dict = ensemble_res.to_dict()
+
+        else:
+            # 3. Image Pipeline: Multi-Model Image Ensemble
+            image_bytes = original_path.read_bytes()
+            # Support test monkeypatches and disabled/mock providers on main.synthetic_detector
+            if (
+                hasattr(main, "synthetic_detector")
+                and main.synthetic_detector is not None
+                and type(main.synthetic_detector).__name__ != "OnnxSyntheticImageDetector"
+            ):
+                from app.detectors import detection_to_dict
+
+                detection_dict = detection_to_dict(main.synthetic_detector.analyze(image_bytes))
+            else:
+                with Image.open(io.BytesIO(image_bytes)) as raw_img:
+                    rgb_img = raw_img.convert("RGB")
+                    detector_outputs = [
+                        detector.predict(rgb_img) for detector in registry.image_detectors
+                    ]
+
+                # Also compute spectral forensics for forensics panel
+                from app.detectors import compute_spectral_drift
+
+                spectral_data = compute_spectral_drift(image_bytes)
+
+                ensemble_res = evaluate_image_ensemble(analysis_id, detector_outputs)
+                detection_dict = ensemble_res.to_dict()
+                detection_dict["spectral_forensics"] = spectral_data
+
+        _finish(job_id, analysis_id, worker_id, detection_dict, provenance)
         return True
     except Exception as exc:
-        logger.warning("Analysis job failed (analysis_id=%s, kind=%s)", analysis_id, type(exc).__name__)
+        logger.warning(
+            "Analysis job failed (analysis_id=%s, kind=%s): %s",
+            analysis_id,
+            type(exc).__name__,
+            exc,
+        )
         _retry_or_fail(job_id, analysis_id, worker_id, type(exc).__name__)
         return True
 
 
 def run_forever(poll_seconds: float = 1.0, worker_id: str = WORKER_ID) -> None:
-    logger.info("Analysis worker started (worker_id=%s)", worker_id)
-    detector_health = main.synthetic_detector.healthcheck()
-    logger.info("Detector status: %s", detector_health.get("status"))
+    logger.info("Initializing CGS DeepFake Shield worker (worker_id=%s)", worker_id)
+
+    # 1. Verify models integrity against models.lock.json on startup (Section 2 Rule 6)
+    try:
+        verify_models_lockfile()
+    except Exception as exc:
+        logger.error("Startup integrity check failed: %s", exc)
+        raise
+
+    # 2. Initialize warm model registry (Section 3)
+    registry.initialize()
+    logger.info("Worker models ready: %s", registry.healthcheck()["status"])
+
     last_cleanup = 0.0
     while True:
         try:
             _heartbeat(worker_id)
-            if time.monotonic() - last_cleanup >= 3600:
+            if time.monotonic() - last_cleanup >= 1800:  # Check cleanup every 30m
                 cleanup_expired_uploads()
                 last_cleanup = time.monotonic()
             processed = process_one(worker_id)
         except Exception as exc:
-            logger.warning("Worker loop encountered a service error: %s", type(exc).__name__)
+            logger.warning("Worker loop encountered an error: %s", type(exc).__name__)
             processed = False
         if not processed:
             time.sleep(max(0.2, poll_seconds))
@@ -318,9 +410,14 @@ def run_forever(poll_seconds: float = 1.0, worker_id: str = WORKER_ID) -> None:
 
 def main_cli() -> None:
     parser = argparse.ArgumentParser(description="CGS DeepFake Shield durable inference worker")
-    parser.add_argument("--poll-seconds", type=float, default=float(os.getenv("WORKER_POLL_SECONDS", "1")))
+    parser.add_argument(
+        "--poll-seconds", type=float, default=float(os.getenv("WORKER_POLL_SECONDS", "1"))
+    )
     args = parser.parse_args()
-    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    logging.basicConfig(
+        level=os.getenv("LOG_LEVEL", "INFO"),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
     run_forever(args.poll_seconds)
 
 

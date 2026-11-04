@@ -1,38 +1,22 @@
-:root {
-  color-scheme: dark;
-  --bg: #000000;
-  --bg-raised: #08080b;
-  --bg-sunken: #040406;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.15);
-  --text: #ffffff;
-  --text-muted: #94a3b8;
-  --text-faint: #64748b;
-  --brand: #a3e635;
-  --action: #65a30d;
-  --caution: #f5b454;
-  --ok: #34d399;
-  --shadow-soft: 18px 18px 42px rgba(0, 0, 0, 0.72), -9px -9px 28px rgba(255, 255, 255, 0.018);
-  --surface-glow: rgba(163, 230, 53, 0.09);
-  --progress: 0%;
-}
-
-:root[data-theme="light"] {
-  color-scheme: light;
-  --bg: #f3f5ee;
-  --bg-raised: #f8faf4;
-  --bg-sunken: #e7ebdf;
-  --line: rgba(15, 23, 42, 0.1);
-  --line-strong: rgba(15, 23, 42, 0.2);
-  --text: #11170d;
+:root,
+:root[data-theme="light"],
+:root[data-theme="dark"] {
+  color-scheme: light !important;
+  --bg: #f8faf5;
+  --bg-raised: #ffffff;
+  --bg-sunken: #edf2e6;
+  --line: rgba(15, 23, 42, 0.09);
+  --line-strong: rgba(15, 23, 42, 0.18);
+  --text: #0f172a;
   --text-muted: #475569;
   --text-faint: #64748b;
-  --brand: #4d7c0f;
-  --action: #3f6212;
+  --brand: #65a30d;
+  --action: #4d7c0f;
   --caution: #b7791f;
   --ok: #059669;
-  --shadow-soft: 16px 16px 38px rgba(15, 23, 42, 0.09), -8px -8px 24px rgba(255, 255, 255, 0.88);
-  --surface-glow: rgba(101, 163, 13, 0.09);
+  --shadow-soft: 0 10px 30px -5px rgba(0, 0, 0, 0.06), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+  --surface-glow: rgba(132, 204, 22, 0.12);
+  --progress: 0%;
 }
 
 html {
@@ -80,9 +64,12 @@ button:disabled {
   cursor: not-allowed;
 }
 
-::selection {
-  background: rgba(163, 230, 53, 0.28);
-  color: var(--text);
+::selection,
+*::selection,
+::-moz-selection,
+*::-moz-selection {
+  background: #a3e635 !important;
+  color: #000000 !important;
 }
 
 .skip-link {
@@ -1708,9 +1695,12 @@ select,
   caret-color: var(--primary-glow);
 }
 
-::selection {
-  background: rgba(163, 230, 53, 0.28);
-  color: var(--text);
+::selection,
+*::selection,
+::-moz-selection,
+*::-moz-selection {
+  background: #a3e635 !important;
+  color: #000000 !important;
 }
 
 .site-header {
@@ -2046,16 +2036,16 @@ select,
 
 .home-hero {
   min-height: auto;
-  padding-top: clamp(0.25rem, 0.8vw, 0.65rem);
+  padding-top: clamp(2.5rem, 4.5vw, 4.2rem);
 }
 
 .home-hero__inner {
   min-height: 530px;
   align-items: start;
-  padding-top: 0;
+  padding-top: clamp(1rem, 2vw, 2rem);
 }
 
-.home-hero__copy { padding-top: 0.35rem; }
+.home-hero__copy { padding-top: clamp(0.75rem, 1.5vw, 1.4rem); }
 
 .route-page { padding-top: clamp(0.35rem, 0.9vw, 0.75rem); }
 .pricing-page,
@@ -2067,22 +2057,66 @@ select,
 
 .contact-page {
   position: relative;
-  padding-top: clamp(1rem, 2vw, 2rem);
-  padding-bottom: clamp(3rem, 6vw, 6rem);
-  /* Slightly increased background color visibility behind & outside the contact form */
-  background:
-    radial-gradient(ellipse 90% 65% at 50% 10%, rgba(163, 230, 53, 0.12), transparent 60%),
-    radial-gradient(circle at 10% 90%, rgba(34, 197, 94, 0.08), transparent 45%),
-    radial-gradient(circle at 90% 40%, rgba(163, 230, 53, 0.07), transparent 50%),
-    var(--bg);
+  overflow: hidden;
+  padding-top: clamp(1.2rem, 2.5vw, 2.5rem);
+  padding-bottom: clamp(3.5rem, 7vw, 6.5rem);
+  background-color: #f7faf2;
+  background-image:
+    radial-gradient(circle 800px at 50% 0%, rgba(163, 230, 53, 0.22), transparent 70%),
+    radial-gradient(circle 650px at 95% 35%, rgba(101, 163, 13, 0.12), transparent 60%),
+    radial-gradient(circle 700px at 5% 85%, rgba(34, 197, 94, 0.1), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 50% 45%, rgba(255, 255, 255, 0.65), transparent 100%),
+    linear-gradient(rgba(101, 163, 13, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(101, 163, 13, 0.05) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+  background-position: 0 0, 0 0, 0 0, 0 0, -1px -1px, -1px -1px;
+}
+
+.contact-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(101, 163, 13, 0.2) 1.25px, transparent 1.25px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(ellipse 90% 75% at 50% 30%, black 25%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 75% at 50% 30%, black 25%, transparent 75%);
+  opacity: 0.65;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.contact-page::after {
+  content: "";
+  position: absolute;
+  top: -120px;
+  right: -120px;
+  width: 580px;
+  height: 580px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, transparent 38%, rgba(163, 230, 53, 0.1) 39%, transparent 41%, transparent 58%, rgba(101, 163, 13, 0.07) 59%, transparent 61%, transparent 78%, rgba(163, 230, 53, 0.05) 79%, transparent 81%);
+  border: 1px dashed rgba(101, 163, 13, 0.2);
+  mask-image: radial-gradient(circle at 50% 50%, black 45%, transparent 80%);
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, black 45%, transparent 80%);
+  z-index: 0;
+}
+
+.contact-page > .container {
+  position: relative;
+  z-index: 1;
 }
 
 :root[data-theme="light"] .contact-page {
-  background:
-    radial-gradient(ellipse 90% 65% at 50% 10%, rgba(101, 163, 13, 0.16), transparent 60%),
-    radial-gradient(circle at 10% 90%, rgba(16, 185, 129, 0.1), transparent 45%),
-    radial-gradient(circle at 90% 40%, rgba(101, 163, 13, 0.08), transparent 50%),
-    #e8ece0;
+  background-color: #f7faf2;
+  background-image:
+    radial-gradient(circle 800px at 50% 0%, rgba(163, 230, 53, 0.22), transparent 70%),
+    radial-gradient(circle 650px at 95% 35%, rgba(101, 163, 13, 0.12), transparent 60%),
+    radial-gradient(circle 700px at 5% 85%, rgba(34, 197, 94, 0.1), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 50% 45%, rgba(255, 255, 255, 0.65), transparent 100%),
+    linear-gradient(rgba(101, 163, 13, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(101, 163, 13, 0.05) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+  background-position: 0 0, 0 0, 0 0, 0 0, -1px -1px, -1px -1px;
 }
 
 .contact-hero {
@@ -2500,8 +2534,8 @@ select,
 
 
 @media (max-width: 640px) {
-  .home-hero { padding-top: 1rem; }
-  .home-hero__inner { padding-top: 0; }
+  .home-hero { padding-top: 2.25rem; }
+  .home-hero__inner { padding-top: 0.75rem; }
   .contact-hero { grid-template-columns: 1fr; gap: 1.25rem; }
   .contact-hero__copy h1 { font-size: clamp(2.35rem, 10vw, 3.2rem); }
   .contact-hero__signal { padding-block: 0.25rem; }

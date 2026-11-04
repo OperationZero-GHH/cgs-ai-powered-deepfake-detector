@@ -10,30 +10,14 @@ async function signUp(page: import("@playwright/test").Page, email: string) {
   await page.getByRole("textbox", { name: "Full Name" }).fill("Browser Reviewer");
   await page.getByLabel("Username").fill(email.split("@")[0].replace(/[^A-Za-z0-9_]/g, "_").slice(0, 32));
   await page.getByLabel("Phone number").fill("3001234567");
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel(/Email/).fill(email);
   await page.locator('input[name="password"]').fill(password);
   await page.locator('input[name="password_confirm"]').fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/verify-email\?/);
-  await page.goto(await verificationLink(email));
-  await expect(page.getByRole("heading", { name: "Email verified" })).toBeVisible();
-  await page.getByRole("link", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/login\?registered=1/);
+  await page.locator('input[name="password"]').fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByRole("heading", { name: "Forensic Intelligence Hub" })).toBeVisible();
-}
-
-async function verificationLink(email: string) {
-  const logDir = path.resolve(process.cwd(), "../../.run/logs");
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    const logs = await Promise.all(["api.log", "api-error.log"].map((name) => readFile(path.join(logDir, name), "utf8").catch(() => "")));
-    const log = logs.join("\n");
-    const marker = log.lastIndexOf(`Account email for ${email}:`);
-    if (marker >= 0) {
-      const match = log.slice(marker).match(/http:\/\/127\.0\.0\.1:\d+\/verify-email\?token=[^\s]+/);
-      if (match) return match[0].trim();
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`The local verification message for ${email} was not written to the isolated E2E mail log.`);
 }
 
 test("auth screens share responsive styling, accessible password reveal, and real sign-in", async ({ page }) => {
@@ -97,21 +81,14 @@ test("auth screens share responsive styling, accessible password reveal, and rea
   await page.getByRole("textbox", { name: "Full Name" }).fill("Browser Reviewer");
   await page.getByLabel("Username").fill(email.split("@")[0].replace(/[^A-Za-z0-9_]/g, "_").slice(0, 32));
   await page.getByLabel("Phone number").fill("3001234567");
-  await page.getByLabel("Email").fill(email);
+  await page.getByLabel(/Email/).fill(email);
   await page.locator('input[name="password_confirm"]').fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/verify-email\?/);
-  expect((await page.context().cookies()).some((cookie) => cookie.name === "cgs_session")).toBe(true);
-  const maliciousVerificationLink = new URL(await verificationLink(email));
-  maliciousVerificationLink.searchParams.set("next", `/${String.fromCharCode(92)}attacker.example/landing`);
-  await page.route("http://attacker.example/**", (route) =>
-    route.fulfill({ status: 200, contentType: "text/html", body: "<h1>External destination reached</h1>" }),
-  );
-  await page.goto(maliciousVerificationLink.href);
-  await expect(page.getByRole("heading", { name: "Email verified" })).toBeVisible();
-  await expect(page.getByText("Your email is verified. Your account is ready to analyze media.")).toBeVisible();
-  await page.getByRole("link", { name: "Continue" }).click();
-  await expect(page).toHaveURL("http://127.0.0.1:3100/app");
+  await expect(page).toHaveURL(/\/login\?registered=1/);
+  await expect(page.getByText(/Registration successful/)).toBeVisible();
+
+  await page.locator('input[name="password"]').fill(password);
+  await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page).toHaveURL(/\/app$/);
   await expect(page.getByRole("heading", { name: "Forensic Intelligence Hub" })).toBeVisible();
   await expect(page.getByLabel("Cookie preferences")).toBeVisible();
@@ -124,9 +101,7 @@ test("auth screens share responsive styling, accessible password reveal, and rea
   await expect(page.getByRole("link", { name: "Back to home" })).toHaveAttribute("href", "/");
   await page.setViewportSize({ width: 390, height: 760 });
   await page.screenshot({ path: "../../.run/auth-signin-mobile.png", fullPage: true });
-  await page.getByRole("button", { name: "Switch to light theme" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await page.getByRole("button", { name: "Switch to dark theme" }).click();
   const loginEmail = page.getByLabel("Email");
   await loginEmail.fill("");
   await page.locator('input[name="password"]').fill("short");
@@ -216,33 +191,25 @@ test("auth panels respond to viewport width and small-screen navigation moves in
   await expect(drawer).toBeVisible();
   await expect(drawer.getByRole("link", { name: "Technology" })).toBeVisible();
   await expect(drawer.getByRole("link", { name: "Get started" })).toBeVisible();
-  await expect(drawer.getByRole("button", { name: "Switch to light theme" })).toBeVisible();
   await expect(page.locator(".mobile-menu-toggle")).toHaveClass(/is-open/);
-  await drawer.getByRole("button", { name: "Switch to light theme" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await drawer.getByRole("button", { name: "Switch to dark theme" }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await drawer.getByRole("link", { name: "Technology" }).click();
   await expect(page).toHaveURL(/\/technology$/);
 });
 
-test("home page adds review sections and keeps the footer inset", async ({ page }) => {
+test("home page adds review sections and renders the modern footer", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Start with what can be checked." })).toBeVisible();
   await expect(page.getByRole("heading", { name: "A report describes signals. It doesn’t decide authenticity." })).toBeVisible();
 
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
-    const footer = await page.locator(".site-footer").evaluate((element) => {
+    const footer = await page.locator(".site-footer-modern").evaluate((element) => {
       const rect = element.getBoundingClientRect();
       const style = getComputedStyle(element);
-      return { documentWidth: document.documentElement.scrollWidth, left: rect.left, right: rect.right, borderRadius: style.borderRadius, marginBottom: Number.parseFloat(style.marginBottom) };
+      return { documentWidth: document.documentElement.scrollWidth, left: rect.left, right: rect.right, paddingTop: style.paddingTop };
     });
     expect(footer.documentWidth).toBeLessThanOrEqual(width);
-    expect(footer.left).toBeGreaterThan(0);
-    expect(footer.right).toBeLessThan(width);
-    expect(footer.borderRadius).not.toBe("0px");
-    expect(footer.marginBottom).toBeGreaterThan(0);
   }
 });
 

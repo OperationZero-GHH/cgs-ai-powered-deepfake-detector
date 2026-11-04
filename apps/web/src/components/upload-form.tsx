@@ -6,6 +6,8 @@ import Link from "next/link";
 import { api, ApiError, formatBytes, type Analysis } from "@/lib/api";
 import { Tooltip } from "@/components/tooltip";
 import { useAccountAccess } from "@/components/account-access-context";
+import { verifyAssetType, type TypeVerificationResult } from "@/lib/type-verification";
+import { NeuralScanOverlay } from "@/components/neural-scan-overlay";
 
 const DEFAULT_MAX_BYTES = 50 * 1024 * 1024;
 const ACCEPT = [
@@ -16,6 +18,16 @@ const ACCEPT = [
   "video/webm",
   "video/quicktime",
   "video/x-msvideo",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/flac",
+  "audio/x-flac",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/x-m4a",
+  "audio/aac",
 ];
 
 export function UploadForm() {
@@ -27,6 +39,8 @@ export function UploadForm() {
   const [maxBytes, setMaxBytes] = useState(DEFAULT_MAX_BYTES);
   const [detectorStatus, setDetectorStatus] = useState("checking");
   const [inspectionsEnabled, setInspectionsEnabled] = useState(true);
+  const [typeVerification, setTypeVerification] = useState<TypeVerificationResult | null>(null);
+  const [verifyingType, setVerifyingType] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const { status, loading: accessLoading, refresh: refreshAccountAccess } = useAccountAccess();
@@ -34,6 +48,7 @@ export function UploadForm() {
   const canAnalyze = Boolean(status?.can_analyze && inspectionsEnabled);
 
   const isVideo = file?.type.startsWith("video/") || Boolean(file?.name.match(/\.(mp4|webm|mov|avi|mkv)$/i));
+  const isAudio = file?.type.startsWith("audio/") || Boolean(file?.name.match(/\.(wav|mp3|flac|ogg|m4a|aac)$/i));
 
   useEffect(() => {
     if (!file) {
@@ -58,22 +73,39 @@ export function UploadForm() {
   const maxLabel =
     maxBytes % (1024 * 1024) === 0 ? `${maxBytes / (1024 * 1024)} MB` : formatBytes(maxBytes);
 
-  function choose(candidate?: File) {
+  async function choose(candidate?: File) {
     setError("");
     if (!canAnalyze) return;
     if (!candidate) return;
     const isSupported =
       ACCEPT.includes(candidate.type) ||
-      Boolean(candidate.name.match(/\.(jpe?g|png|webp|mp4|webm|mov|avi|mkv)$/i));
+      Boolean(candidate.name.match(/\.(jpe?g|png|webp|mp4|webm|mov|avi|mkv|wav|mp3|flac|ogg|m4a|aac)$/i));
     if (!isSupported) {
-      setError("Upload a supported format: JPEG, PNG, WebP, MP4, WebM, or MOV.");
+      setError("Upload a supported format: JPEG, PNG, WebP, MP4, WebM, MOV, WAV, MP3, FLAC, or OGG.");
+      setTypeVerification(null);
       return;
     }
     if (candidate.size > maxBytes) {
       setError(`This media file is larger than the ${maxLabel} limit.`);
+      setTypeVerification(null);
       return;
     }
-    setFile(candidate);
+
+    setVerifyingType(true);
+    try {
+      const verified = await verifyAssetType(candidate);
+      setTypeVerification(verified);
+      if (!verified.verified) {
+        setError(verified.message);
+        setFile(null);
+        return;
+      }
+      setFile(candidate);
+    } catch {
+      setFile(candidate);
+    } finally {
+      setVerifyingType(false);
+    }
   }
 
   function onInput(event: ChangeEvent<HTMLInputElement>) {
@@ -171,16 +203,17 @@ export function UploadForm() {
         </div>
       )}
 
+
       {/* Hidden file input */}
       <input
         ref={input}
         type="file"
-        accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,video/x-msvideo"
+        accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,video/x-msvideo,audio/wav,audio/mpeg,audio/flac,audio/ogg,audio/mp4,audio/aac"
         onChange={onInput}
         className="visually-hidden"
         style={{ display: "none" }}
         disabled={!canAnalyze || busy}
-        aria-label="Choose an image or video file"
+        aria-label="Choose an image, video, or audio file"
       />
 
       <div
@@ -210,6 +243,12 @@ export function UploadForm() {
                 <polygon points="23 7 16 12 23 17 23 7" />
                 <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
               </svg>
+            ) : isAudio ? (
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
             ) : (
               <svg
                 viewBox="0 0 24 24"
@@ -233,11 +272,13 @@ export function UploadForm() {
           {file
             ? isVideo
               ? "Video file selected"
-              : "Image file selected"
-            : "Drop an image or video to inspect"}
+              : isAudio
+                ? "Audio file selected"
+                : "Image file selected"
+            : "Drop an image, video, or audio file to inspect"}
         </h3>
         <p className="dropzone-sub">
-          {file ? file.name : `JPEG, PNG, WebP, MP4, WebM, MOV · up to ${maxLabel}`}
+          {file ? file.name : `Images, Videos, or Audio (WAV, MP3, FLAC, M4A, OGG) · up to ${maxLabel}`}
         </p>
 
         <button
@@ -249,7 +290,7 @@ export function UploadForm() {
           }}
           disabled={!canAnalyze || busy}
         >
-          {file ? "Replace media" : "Choose image or video"}
+          {file ? "Replace media" : "Choose media file"}
         </button>
       </div>
 
@@ -265,12 +306,16 @@ export function UploadForm() {
                 autoPlay
                 loop
               />
+            ) : isAudio ? (
+              <div className="upload-audio-preview" style={{ padding: "0.25rem 0.5rem" }}>
+                <audio src={preview} controls style={{ maxHeight: "32px", width: "160px" }} />
+              </div>
             ) : (
               <img className="upload-thumb" src={preview} alt={`Preview of ${file.name}`} />
             )
           )}
-          <span className={`file-badge ${isVideo ? "file-badge-video" : ""}`}>
-            {isVideo ? "VIDEO" : "IMG"}
+          <span className={`file-badge ${isVideo ? "file-badge-video" : isAudio ? "file-badge-audio" : ""}`}>
+            {isVideo ? "VIDEO" : isAudio ? "AUDIO" : "IMG"}
           </span>
           <div className="file-details">
             <strong title={file.name}>{file.name}</strong>
@@ -281,13 +326,58 @@ export function UploadForm() {
           <Tooltip label="Remove selected media">
             <button
               className="icon-button file-remove-btn"
-              onClick={() => setFile(null)}
+              onClick={() => {
+                setFile(null);
+                setTypeVerification(null);
+              }}
               aria-label="Remove selected media"
               type="button"
             >
               ×
             </button>
           </Tooltip>
+        </div>
+      )}
+
+      {verifyingType && (
+        <div className="type-verification-badge" style={{ background: "rgba(163, 230, 53, 0.08)", border: "1px dashed rgba(163, 230, 53, 0.4)" }}>
+          <span className="spinner" style={{ width: 16, height: 16, marginRight: 8 }} />
+          <span>Verifying binary container &amp; magic byte signatures…</span>
+        </div>
+      )}
+
+      {typeVerification && typeVerification.verified && (
+        <div className="type-verification-badge is-verified">
+          <span className="type-verification-icon">✓</span>
+          <div className="type-verification-details">
+            <div className="type-verification-title">
+              <strong>Type Verification: Passed</strong>
+              <span className="type-pipeline-pill">
+                {typeVerification.category.toUpperCase()} · {typeVerification.format}
+              </span>
+            </div>
+            <p style={{ margin: "0.2rem 0", fontSize: "0.82rem", color: "var(--text-muted)" }}>
+              {typeVerification.message}
+            </p>
+            <div className="type-verification-meta">
+              <span>Magic Signature: <code>{typeVerification.magicHex || "N/A"}</code></span>
+              <span style={{ marginLeft: "0.75rem" }}>
+                Neural Pipeline: <strong>{typeVerification.modelPipeline}</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {busy && file && (
+        <div style={{ margin: "1rem 0", borderRadius: "8px", overflow: "hidden" }}>
+          <NeuralScanOverlay
+            mediaType={typeVerification?.category || (isVideo ? "video" : isAudio ? "audio" : "image")}
+            active={true}
+            isPending={true}
+            statusText="STREAMING ASSET TENSORS TO NEURAL MODEL"
+            fileName={file.name}
+          />
         </div>
       )}
 

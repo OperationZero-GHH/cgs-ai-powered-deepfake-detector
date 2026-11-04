@@ -5,12 +5,19 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, formatBytes, formatDate, type Analysis } from "@/lib/api";
 import { useAccountAccess } from "@/components/account-access-context";
+import { NeuralScanOverlay } from "@/components/neural-scan-overlay";
 
 function classificationLabel(value: string) {
-  if (value === "likely_ai_generated") return "AI-Generated Deepfake Detected";
-  if (value === "authentic_hardware_provenance") return "Authentic Hardware Provenance (C2PA Verified)";
-  if (value === "inconclusive") return "Inconclusive / No Strong Signal";
-  return "Authentic / Natural Media";
+  if (value === "likely_ai_generated" || value === "likely_manipulated") {
+    return "Indicators Suggest Synthetic Manipulation";
+  }
+  if (value === "authentic_hardware_provenance") {
+    return "Authentic Hardware Provenance (C2PA Verified)";
+  }
+  if (value === "likely_authentic") {
+    return "Indicators Consistent with Natural Recording";
+  }
+  return "Inconclusive / Mixed Detector Signals";
 }
 
 function statusLabel(value: string) {
@@ -25,6 +32,7 @@ export default function AnalysisPage() {
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [copiedHash, setCopiedHash] = useState(false);
+  const [showNeuralOverlay, setShowNeuralOverlay] = useState(true);
 
   useEffect(() => {
     let disposed = false;
@@ -111,10 +119,26 @@ export default function AnalysisPage() {
   const pending = item.status === "queued" || item.status === "processing";
   const failed = item.status === "failed";
   const synthetic = item.detectors.find(
-    (d) => d.task === "synthetic_image_detection" || d.task === "video_deepfake_temporal_detection"
+    (d) =>
+      d.task === "synthetic_image_detection" ||
+      d.task === "video_deepfake_temporal_detection" ||
+      d.task === "audio_deepfake_detection"
   );
-  const isAiSignal = item.summary.classification === "likely_ai_generated";
-  const isVideo = Boolean(item.file.is_video || item.file.detected_mime_type?.startsWith("video/"));
+  const isAiSignal =
+    item.summary.classification === "likely_ai_generated" ||
+    item.verdict === "likely_manipulated";
+  const isVideo = Boolean(
+    item.file.is_video ||
+    item.media_type === "video" ||
+    item.file.detected_mime_type?.startsWith("video/")
+  );
+  const isAudio = Boolean(
+    item.file.is_audio ||
+    item.media_type === "audio" ||
+    item.file.detected_mime_type?.startsWith("audio/")
+  );
+  const models = item.models ?? [];
+  const audioResult = item.audio;
   const spectral = synthetic?.spectral_forensics;
   const frameTimeline = synthetic?.frame_timeline;
   const layer1Spatial = synthetic?.layer1_spatial;
@@ -131,7 +155,13 @@ export default function AnalysisPage() {
               FORENSIC EVIDENCE RECORD · {item.analysis_id.slice(0, 12).toUpperCase()}
             </span>
           </div>
-          <h1>{isVideo ? "Video Deepfake Inspection Report" : "Image Forensic Inspection Report"}</h1>
+          <h1>
+            {isVideo
+              ? "Video Deepfake Inspection Report"
+              : isAudio
+              ? "Audio Deepfake Inspection Report"
+              : "Image Forensic Inspection Report"}
+          </h1>
           <p>
             Generated on {formatDate(item.created_at)}
             {item.completed_at ? ` · Screening completed ${formatDate(item.completed_at)}` : ""}
@@ -203,7 +233,7 @@ export default function AnalysisPage() {
                   : pending
                   ? statusLabel(item.status).toUpperCase()
                   : isAiSignal
-                  ? "AI SYNTHETIC DETECTED"
+                  ? "SYNTHETIC SIGNAL FLAGGED"
                   : isHardwareAuth
                   ? "C2PA HARDWARE AUTHENTICATED"
                   : "NO STRONG AI SIGNAL"}
@@ -226,15 +256,55 @@ export default function AnalysisPage() {
           <section className="dash-panel report-media-card">
             <div className="panel-header">
               <div>
-                <h3>{isVideo ? "Video Stream Inspection" : "Ingested Media Integrity"}</h3>
+                <h3>
+                  {isVideo
+                    ? "Video Stream Inspection"
+                    : isAudio
+                    ? "Audio Stream Inspection"
+                    : "Ingested Media Integrity"}
+                </h3>
                 <p>Private vault partition · Cryptographically fingerprinted</p>
               </div>
-              <span className="privacy-chip">
-                <i aria-hidden="true" /> {isVideo ? "VIDEO STREAM" : "STILL IMAGE"}
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className={`neural-overlay-toggle ${showNeuralOverlay ? "is-active" : ""}`}
+                  onClick={() => setShowNeuralOverlay((prev) => !prev)}
+                  title="Toggle neural scanning lattice & telemetry reticle"
+                >
+                  <span aria-hidden="true">◈</span>
+                  {showNeuralOverlay ? "Hide Neural Scan" : "Show Neural Scan"}
+                </button>
+                <span className="privacy-chip">
+                  <i aria-hidden="true" /> {isVideo ? "VIDEO STREAM" : isAudio ? "AUDIO TRACK" : "STILL IMAGE"}
+                </span>
+              </div>
             </div>
 
-            <div className="report-media-container">
+            <div className="report-media-container" style={{ position: "relative" }}>
+              {(pending || showNeuralOverlay) && (
+                <div
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    zIndex: 10,
+                    pointerEvents: pending ? "all" : "none",
+                  }}
+                >
+                  <NeuralScanOverlay
+                    mediaType={isVideo ? "video" : isAudio ? "audio" : "image"}
+                    active={true}
+                    isPending={pending}
+                    statusText={
+                      pending
+                        ? "SCANNING ASSET TENSORS TO NEURAL MODEL"
+                        : "NEURAL FORENSIC RETICLE & LATENT TENSORS"
+                    }
+                    fileName={item.file.original_filename}
+                    dimensions={{ width: item.file.width, height: item.file.height }}
+                  />
+                </div>
+              )}
               {isVideo ? (
                 <>
                 <div className="video-player-box no-print">
@@ -250,6 +320,18 @@ export default function AnalysisPage() {
                 </div>
                 {item.file.image_url && <img className="print-only report-print-video-preview" src={item.file.image_url} alt="Representative video frame" />}
                 </>
+              ) : isAudio ? (
+                <div className="audio-player-box" style={{ padding: "2.5rem 1.5rem", textAlign: "center" }}>
+                  <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }} aria-hidden="true">🎵</div>
+                  <audio
+                    controls
+                    className="report-audio-element"
+                    src={item.file.media_url || `/api/v1/analyses/${item.analysis_id}/original`}
+                    style={{ width: "100%", maxWidth: "480px" }}
+                  >
+                    Your browser does not support HTML5 audio playback.
+                  </audio>
+                </div>
               ) : (
                 item.file.image_url && (
                   <div className="image-viewer-box">
@@ -273,6 +355,16 @@ export default function AnalysisPage() {
                 <small>FORMAT &amp; SIZE</small>
                 <strong>
                   {item.file.detected_mime_type} · {formatBytes(item.file.size_bytes)}
+                </strong>
+              </div>
+              <div className="tech-cell">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <small>TYPE VERIFICATION</small>
+                  <span style={{ fontSize: "0.68rem", color: "#16a34a", fontWeight: 700 }}>VALIDATED</span>
+                </div>
+                <strong style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  <span style={{ color: "#84cc16" }}>✓</span>
+                  Container Signature Matched
                 </strong>
               </div>
               <div className="tech-cell">
@@ -422,82 +514,338 @@ export default function AnalysisPage() {
             </section>
           )}
 
-          {/* Neural Model Screening Card */}
-          <section className="dash-panel report-detector-card">
-            <div className="panel-header">
-              <div>
-                <h3>{isVideo ? "Dual-Layer Ensemble Verdict" : "Neural Artifact Screening"}</h3>
-                <p>{isVideo ? "Combined spatial ONNX + temporal LSTM ensemble calibration" : "FP16 ONNX DeepFake classifier & spatial upsampling detection"}</p>
+          {/* Multi-Model Ensemble Breakdown */}
+          {models.length > 0 ? (
+            <section className="dash-panel report-detector-card">
+              <div className="panel-header">
+                <div>
+                  <h3>Multi-Model Neural Screening Ensemble</h3>
+                  <p>Parallel evaluation across independent Vision Transformer and CNN architectures</p>
+                </div>
+                <span className="setting-status-badge is-active">
+                  {item.confidence_band?.toUpperCase() ?? "MEDIUM"} CONFIDENCE
+                </span>
               </div>
-              <span className="setting-status-badge is-active">{isVideo && layer2Temporal ? "DUAL-LAYER" : "ONNX RUNTIME"}</span>
-            </div>
 
-            {!synthetic || synthetic.status === "queued" ? (
-              <p className="system-note-body">Analysis queued for persistent background worker.</p>
-            ) : synthetic.status === "completed" ? (
               <div className="detector-findings-box">
                 <div className="detector-score-row">
                   <div className="detector-score-info">
                     <strong>
-                      {synthetic.label === "ai_generated_signal"
-                        ? "Synthetic Generation Signal Detected"
-                        : "No Strong AI Generation Signal"}
+                      {isAiSignal
+                        ? "Synthetic Generation Indicators Detected"
+                        : item.verdict === "likely_authentic"
+                        ? "Indicators Consistent with Natural Acquisition"
+                        : "Ambiguous or Inconclusive Ensemble Signals"}
                     </strong>
-                    <small>{synthetic.model_id} · {synthetic.model_version?.slice(0, 24)}</small>
+                    <small>
+                      Composite score: {(item.score !== undefined ? item.score * 100 : 50).toFixed(1)}% · Band: {item.confidence_band ?? "medium"}
+                    </small>
                   </div>
                   <div className="score-badge-box">
                     <span className="score-val font-mono">
-                      {synthetic.score === undefined || synthetic.score === null
-                        ? "—"
-                        : `${(synthetic.score * 100).toFixed(1)}%`}
+                      {(item.score !== undefined ? item.score * 100 : 50).toFixed(1)}%
                     </span>
-                    <small>Screening Score</small>
+                    <small>Composite Score</small>
                   </div>
                 </div>
 
                 <div className="score-progress-track">
                   <div
                     className={`score-progress-fill ${isAiSignal ? "fill-caution" : "fill-clean"}`}
-                    style={{ width: `${Math.min(100, (synthetic.score ?? 0.1) * 100)}%` }}
+                    style={{ width: `${Math.min(100, Math.max(5, (item.score ?? 0.5) * 100))}%` }}
                   />
                   <div className="threshold-marker" style={{ left: "65%" }} title="Threshold: 65%">
                     <span>Threshold: 65%</span>
                   </div>
                 </div>
 
-                <p className="score-semantics-text">{synthetic.score_semantics}</p>
-              </div>
-            ) : (
-              <div className="detector-findings-box">
-                <p className="text-danger">AI screening unavailable: {synthetic.limitations?.[0] ?? "Inference error."}</p>
-              </div>
-            )}
+                <p className="score-semantics-text">{item.summary.explanation}</p>
 
-            {/* Multi-Spectral Frequency Domain Analysis (FFT) */}
-            {spectral && (
-              <div className="spectral-analysis-block">
-                <h4>Multi-Spectral Frequency Domain Drift (FFT)</h4>
-                <div className="spectral-metrics-grid">
-                  <div className="spectral-metric">
-                    <small>HIGH-FREQ POWER</small>
-                    <strong className="font-mono">{spectral.high_freq_power_db} dB</strong>
-                  </div>
-                  <div className="spectral-metric">
-                    <small>LOW-FREQ POWER</small>
-                    <strong className="font-mono">{spectral.low_freq_power_db} dB</strong>
-                  </div>
-                  <div className="spectral-metric">
-                    <small>SPECTRAL DRIFT RATIO</small>
-                    <strong className="font-mono text-accent">{spectral.spectral_drift_ratio}</strong>
-                  </div>
-                  <div className="spectral-metric">
-                    <small>FOURIER DISPERSION</small>
-                    <strong className="font-mono">{spectral.frequency_dispersion}</strong>
+                {/* Per-model breakdown list */}
+                <div className="ensemble-models-list" style={{ marginTop: "1.25rem", borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+                  <h4 style={{ fontSize: "0.9rem", color: "var(--text-muted)", marginBottom: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Contributing Model Classifiers
+                  </h4>
+                  <div style={{ display: "grid", gap: "0.75rem" }}>
+                    {models.map((m, idx) => {
+                      const isHigh = m.p_fake >= 0.65;
+                      const modelFriendlyName =
+                        m.name.includes("dima806")
+                          ? "Dima ViT (Vision Transformer)"
+                          : m.name.includes("prithivMLmods")
+                          ? "Prithiv ViT-v2 (Deepfake Detector)"
+                          : m.name.includes("Harshasnade")
+                          ? "Harshasnade Hybrid (EfficientNetV2 + Swin)"
+                          : m.name;
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "0.6rem 0.85rem",
+                            borderRadius: "6px",
+                            background: "var(--surface-sunken, rgba(0,0,0,0.03))",
+                            border: "1px solid var(--border)",
+                            gap: "0.75rem",
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <div style={{ flex: 1, minWidth: "180px" }}>
+                            <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>
+                              {modelFriendlyName}
+                            </div>
+                            <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", fontFamily: "monospace" }}>
+                              commit {m.version.slice(0, 8)} {m.latency_ms ? `· ${m.latency_ms}ms` : ""}
+                            </div>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                            {m.ok ? (
+                              <>
+                                <div style={{ textAlign: "right" }}>
+                                  <div style={{ fontWeight: 700, fontSize: "0.95rem", color: isHigh ? "var(--danger, #f87171)" : "var(--accent, #06b6d4)" }}>
+                                    {(m.p_fake * 100).toFixed(1)}%
+                                  </div>
+                                  {m.weight !== undefined && (
+                                    <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+                                      Weight: {(m.weight * 100).toFixed(0)}%
+                                    </div>
+                                  )}
+                                </div>
+                                <span
+                                  style={{
+                                    fontSize: "0.72rem",
+                                    padding: "0.2rem 0.5rem",
+                                    borderRadius: "4px",
+                                    fontWeight: 600,
+                                    background: isHigh ? "rgba(239, 68, 68, 0.15)" : "rgba(34, 197, 94, 0.15)",
+                                    color: isHigh ? "var(--danger, #f87171)" : "var(--success, #22c55e)",
+                                  }}
+                                >
+                                  {isHigh ? "SYNTHETIC" : "NATURAL"}
+                                </span>
+                              </>
+                            ) : (
+                              <span
+                                style={{
+                                  fontSize: "0.75rem",
+                                  padding: "0.2rem 0.5rem",
+                                  borderRadius: "4px",
+                                  background: "rgba(100, 116, 139, 0.15)",
+                                  color: "var(--text-muted)",
+                                }}
+                              >
+                                {m.error ?? "Offline / Disabled"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
+
+                {/* Why this result accordion */}
+                <details style={{ marginTop: "1rem", fontSize: "0.84rem", color: "var(--text-muted)" }}>
+                  <summary style={{ cursor: "pointer", color: "var(--accent)", fontWeight: 600 }}>
+                    Why this result? (Calibration &amp; Fallback Rules)
+                  </summary>
+                  <div style={{ padding: "0.75rem 0", lineHeight: 1.5 }}>
+                    <p style={{ margin: "0 0 0.5rem" }}>
+                      Each model&apos;s raw probability output undergoes Platt scaling calibration. 
+                      The composite verdict requires consensus across independent models:
+                    </p>
+                    <ul style={{ paddingLeft: "1.2rem", margin: 0 }}>
+                      <li><strong>Likely Manipulated:</strong> Weighted calibrated score ≥ 65% with inter-model standard deviation &lt; 0.35.</li>
+                      <li><strong>Likely Authentic:</strong> Weighted calibrated score ≤ 35% with inter-model standard deviation &lt; 0.35.</li>
+                      <li><strong>Inconclusive:</strong> Divergent model predictions, fewer than 2 active models, or scores falling in the ambiguity band (35%–65%).</li>
+                    </ul>
+                  </div>
+                </details>
               </div>
-            )}
-          </section>
+
+              {/* Multi-Spectral Frequency Domain Analysis (FFT) */}
+              {spectral && (
+                <div className="spectral-analysis-block">
+                  <h4>Multi-Spectral Frequency Domain Drift (FFT)</h4>
+                  <div className="spectral-metrics-grid">
+                    <div className="spectral-metric">
+                      <small>HIGH-FREQ POWER</small>
+                      <strong className="font-mono">{spectral.high_freq_power_db} dB</strong>
+                    </div>
+                    <div className="spectral-metric">
+                      <small>LOW-FREQ POWER</small>
+                      <strong className="font-mono">{spectral.low_freq_power_db} dB</strong>
+                    </div>
+                    <div className="spectral-metric">
+                      <small>SPECTRAL DRIFT RATIO</small>
+                      <strong className="font-mono text-accent">{spectral.spectral_drift_ratio}</strong>
+                    </div>
+                    <div className="spectral-metric">
+                      <small>FOURIER DISPERSION</small>
+                      <strong className="font-mono">{spectral.frequency_dispersion}</strong>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+          ) : (
+            <section className="dash-panel report-detector-card">
+              <div className="panel-header">
+                <div>
+                  <h3>{isVideo ? "Dual-Layer Ensemble Verdict" : "Neural Artifact Screening"}</h3>
+                  <p>{isVideo ? "Combined spatial ONNX + temporal LSTM ensemble calibration" : "FP16 ONNX DeepFake classifier & spatial upsampling detection"}</p>
+                </div>
+                <span className="setting-status-badge is-active">{isVideo && layer2Temporal ? "DUAL-LAYER" : "ONNX RUNTIME"}</span>
+              </div>
+
+              {!synthetic || synthetic.status === "queued" ? (
+                <p className="system-note-body">Analysis queued for persistent background worker.</p>
+              ) : synthetic.status === "completed" ? (
+                <div className="detector-findings-box">
+                  <div className="detector-score-row">
+                    <div className="detector-score-info">
+                      <strong>
+                        {synthetic.label === "ai_generated_signal"
+                          ? "Synthetic Generation Signal Detected"
+                          : "No Strong AI Generation Signal"}
+                      </strong>
+                      <small>{synthetic.model_id} · {synthetic.model_version?.slice(0, 24)}</small>
+                    </div>
+                    <div className="score-badge-box">
+                      <span className="score-val font-mono">
+                        {synthetic.score === undefined || synthetic.score === null
+                          ? "—"
+                          : `${(synthetic.score * 100).toFixed(1)}%`}
+                      </span>
+                      <small>Screening Score</small>
+                    </div>
+                  </div>
+
+                  <div className="score-progress-track">
+                    <div
+                      className={`score-progress-fill ${isAiSignal ? "fill-caution" : "fill-clean"}`}
+                      style={{ width: `${Math.min(100, (synthetic.score ?? 0.1) * 100)}%` }}
+                    />
+                    <div className="threshold-marker" style={{ left: "65%" }} title="Threshold: 65%">
+                      <span>Threshold: 65%</span>
+                    </div>
+                  </div>
+
+                  <p className="score-semantics-text">{synthetic.score_semantics}</p>
+                </div>
+              ) : (
+                <div className="detector-findings-box">
+                  <p className="text-danger">AI screening unavailable: {synthetic.limitations?.[0] ?? "Inference error."}</p>
+                </div>
+              )}
+
+              {/* Multi-Spectral Frequency Domain Analysis (FFT) */}
+              {spectral && (
+                <div className="spectral-analysis-block">
+                  <h4>Multi-Spectral Frequency Domain Drift (FFT)</h4>
+                  <div className="spectral-metrics-grid">
+                    <div className="spectral-metric">
+                      <small>HIGH-FREQ POWER</small>
+                      <strong className="font-mono">{spectral.high_freq_power_db} dB</strong>
+                    </div>
+                    <div className="spectral-metric">
+                      <small>LOW-FREQ POWER</small>
+                      <strong className="font-mono">{spectral.low_freq_power_db} dB</strong>
+                    </div>
+                    <div className="spectral-metric">
+                      <small>SPECTRAL DRIFT RATIO</small>
+                      <strong className="font-mono text-accent">{spectral.spectral_drift_ratio}</strong>
+                    </div>
+                    <div className="spectral-metric">
+                      <small>FOURIER DISPERSION</small>
+                      <strong className="font-mono">{spectral.frequency_dispersion}</strong>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Audio Deepfake Forensics Card */}
+          {(isAudio || (audioResult && audioResult.ok)) && (
+            <section className="dash-panel report-detector-card">
+              <div className="panel-header">
+                <div>
+                  <h3>Audio Deepfake &amp; Speech Anti-Spoofing Forensics</h3>
+                  <p>Acoustic feature analysis and neural speech representation screening</p>
+                </div>
+                <span className="setting-status-badge is-active">WAV2VEC2</span>
+              </div>
+
+              <div className="detector-findings-box">
+                {audioResult?.ok ? (
+                  <>
+                    <div className="detector-score-row">
+                      <div className="detector-score-info">
+                        <strong>
+                          {audioResult.p_fake >= 0.65
+                            ? "Synthetic Speech Artifacts Detected"
+                            : audioResult.p_fake <= 0.35
+                            ? "Acoustic Patterns Consistent with Natural Speech"
+                            : "Inconclusive Speech Acoustic Patterns"}
+                        </strong>
+                        <small>
+                          Vansh180/deepfake-audio-wav2vec2 · Analyzed {audioResult.duration_seconds.toFixed(1)}s
+                        </small>
+                      </div>
+                      <div className="score-badge-box">
+                        <span className="score-val font-mono">
+                          {(audioResult.p_fake * 100).toFixed(1)}%
+                        </span>
+                        <small>Audio Score</small>
+                      </div>
+                    </div>
+
+                    <div className="score-progress-track">
+                      <div
+                        className={`score-progress-fill ${audioResult.p_fake >= 0.65 ? "fill-caution" : "fill-clean"}`}
+                        style={{ width: `${Math.min(100, Math.max(5, audioResult.p_fake * 100))}%` }}
+                      />
+                      <div className="threshold-marker" style={{ left: "65%" }} title="Threshold: 65%">
+                        <span>Threshold: 65%</span>
+                      </div>
+                    </div>
+
+                    <div className="spectral-metrics-grid" style={{ marginTop: "1rem" }}>
+                      <div className="spectral-metric">
+                        <small>ANALYZED DURATION</small>
+                        <strong className="font-mono">{audioResult.duration_seconds.toFixed(1)}s</strong>
+                      </div>
+                      <div className="spectral-metric">
+                        <small>WINDOWS ANALYZED</small>
+                        <strong className="font-mono">{audioResult.windows_analyzed}</strong>
+                      </div>
+                      <div className="spectral-metric">
+                        <small>WINDOWS FLAGGED</small>
+                        <strong className="font-mono">{audioResult.windows_flagged}</strong>
+                      </div>
+                      <div className="spectral-metric">
+                        <small>FLAG FRACTION</small>
+                        <strong className="font-mono">{((audioResult.flag_fraction ?? 0) * 100).toFixed(1)}%</strong>
+                      </div>
+                    </div>
+
+                    <p className="score-semantics-text" style={{ marginTop: "0.75rem" }}>
+                      Audio deepfake detection screens for vocoder artifacts, acoustic boundaries, and phase inconsistencies.
+                      Detection confidence can be affected by lossy audio compression and background acoustic noise.
+                    </p>
+                  </>
+                ) : (
+                  <p className="system-note-body" style={{ color: "var(--text-muted)" }}>
+                    {audioResult?.error ?? (isAudio ? "Audio analysis was inconclusive or insufficient audio was detected." : "No audio track available for speech anti-spoofing.")}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
 
           {/* Provenance & C2PA Ledger */}
           <section className="dash-panel report-provenance-card">

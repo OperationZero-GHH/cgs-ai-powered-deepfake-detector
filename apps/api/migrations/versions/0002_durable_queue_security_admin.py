@@ -1,7 +1,7 @@
 """Add durable inference jobs, persisted rate limits, provenance, and admin audit."""
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "0002_queue_security_admin"
 down_revision = "0001_initial"
@@ -12,12 +12,20 @@ depends_on = None
 def upgrade() -> None:
     with op.batch_alter_table("analyses") as batch:
         batch.alter_column("completed_at", existing_type=sa.DateTime(timezone=True), nullable=True)
-        batch.add_column(sa.Column("provenance_json", sa.Text(), nullable=False, server_default="{}"))
+        batch.add_column(
+            sa.Column("provenance_json", sa.Text(), nullable=False, server_default="{}")
+        )
 
     op.create_table(
         "inference_jobs",
         sa.Column("id", sa.String(length=32), primary_key=True),
-        sa.Column("analysis_id", sa.String(length=32), sa.ForeignKey("analyses.id", ondelete="CASCADE"), nullable=False, unique=True),
+        sa.Column(
+            "analysis_id",
+            sa.String(length=32),
+            sa.ForeignKey("analyses.id", ondelete="CASCADE"),
+            nullable=False,
+            unique=True,
+        ),
         sa.Column("status", sa.String(length=20), nullable=False),
         sa.Column("attempts", sa.Integer(), nullable=False),
         sa.Column("available_at", sa.DateTime(timezone=True), nullable=False),
@@ -42,7 +50,12 @@ def upgrade() -> None:
     op.create_table(
         "audit_events",
         sa.Column("id", sa.String(length=32), primary_key=True),
-        sa.Column("actor_id", sa.String(length=36), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+        sa.Column(
+            "actor_id",
+            sa.String(length=36),
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
         sa.Column("action", sa.String(length=80), nullable=False),
         sa.Column("subject_id", sa.String(length=80), nullable=True),
         sa.Column("details_json", sa.Text(), nullable=False),
