@@ -1,0 +1,15 @@
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+sqlalchemy>=2.0,<3
+pydantic>=2.7,<3
+python-multipart>=0.0.18,<1
+Pillow>=13.0.0,<14
+argon2-cffi>=23,<26
+email-validator>=2,<3
+python-dotenv>=1,<2
+alembic>=1.13,<2
+psycopg[binary]>=3.2,<4
+onnxruntime>=1.20,<2
+c2pa-python>=0.33,<1
+numpy>=1.24,<3
+httpx>=0.25,<1
