@@ -77,8 +77,11 @@ def _env(name: str, default: str) -> str:
 
 
 APP_ENV = _env("APP_ENV", "development").strip().lower()
-DATABASE_URL = _env("DATABASE_URL", "sqlite:///./data/cgs_deepfake_shield.db")
-STORAGE_DIR = Path(_env("STORAGE_DIR", "./storage")).resolve()
+_is_vercel = os.getenv("VERCEL") == "1"
+_default_db = "sqlite:////tmp/cgs_deepfake_shield.db" if _is_vercel else "sqlite:///./data/cgs_deepfake_shield.db"
+_default_storage = "/tmp/storage" if _is_vercel else "./storage"
+DATABASE_URL = _env("DATABASE_URL", _default_db)
+STORAGE_DIR = Path(_env("STORAGE_DIR", _default_storage)).resolve()
 MODEL_PATH = Path(
     _env("AI_MODEL_PATH", "./models/community_forensics_low_quality_fp16.onnx")
 ).resolve()
@@ -235,7 +238,10 @@ synthetic_detector = create_detector(_env("AI_DETECTOR_PROVIDER", "local"), MODE
 if DATABASE_URL.startswith("sqlite:"):
     db_file = DATABASE_URL.removeprefix("sqlite:///")
     if db_file != ":memory:":
-        Path(db_file).parent.mkdir(parents=True, exist_ok=True)
+        try:
+            Path(db_file).parent.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            pass
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite:") else {},
@@ -1136,9 +1142,12 @@ class HealthOut(BaseModel):
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    STORAGE_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
-    if os.name != "nt":
-        STORAGE_DIR.chmod(0o700)
+    try:
+        STORAGE_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if os.name != "nt":
+            STORAGE_DIR.chmod(0o700)
+    except OSError:
+        pass
     if APP_ENV != "production" and _env("AUTO_CREATE_SCHEMA", "true").lower() == "true":
         Base.metadata.create_all(engine)
     yield
