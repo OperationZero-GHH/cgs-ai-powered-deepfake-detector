@@ -4,7 +4,8 @@
     "api": {
       "root": "apps/api",
       "runtime": "python",
-      "entrypoint": "app/main:app"
+      "entrypoint": "app/main.py",
+      "installCommand": "pip install -r requirements-prod.txt"
     },
     "web": {
       "root": "apps/web",

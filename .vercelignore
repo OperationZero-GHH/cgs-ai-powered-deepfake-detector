@@ -1,9 +1,15 @@
-apps/api/
 models/
 data/
 scripts/
 docs/
-*.py
 __pycache__/
 .venv/
 test-storage/
+apps/api/.pytest_cache/
+apps/api/.ruff_cache/
+apps/api/.venv/
+apps/api/tests/
+apps/api/storage/
+apps/api/data/
+apps/web/node_modules/
+apps/web/e2e/
