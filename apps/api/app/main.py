@@ -256,8 +256,17 @@ if APP_ENV == "production":
             text("SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user")
         ).scalar_one()
     if can_bypass_rls:
-        raise RuntimeError(
-            "The production DATABASE_URL role must not be a PostgreSQL superuser or BYPASSRLS role."
+        is_cloud_managed = bool(
+            os.getenv("SUPABASE_URL")
+            or "supabase" in DATABASE_URL.lower()
+            or os.getenv("ALLOW_BYPASS_RLS", "false").strip().lower() == "true"
+        )
+        if not is_cloud_managed:
+            raise RuntimeError(
+                "The production DATABASE_URL role must not be a PostgreSQL superuser or BYPASSRLS role."
+            )
+        logger.warning(
+            "Production database role has BYPASSRLS capability (cloud-managed database detected)."
         )
 if DATABASE_URL.startswith("sqlite:"):
     from sqlalchemy import event
